@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.python-version
+
+# Node / frontend build output
+frontend/node_modules/
+frontend/dist/
+.vite/
+
+# Local environment files
+.env
+.env.*
+
+# Generated waveforms and logs
+*.vcd
+*.log
+
+# Editor / temp files
+*.swp
+*.swo
