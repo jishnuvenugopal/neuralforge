@@ -1032,7 +1032,9 @@ function RightPanel({ state, dispatch }) {
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const isMock = new URLSearchParams(window.location.search).get("mock") === "true";
-  const wsUrl = "ws://localhost:8000/ws/design";
+  const wsHost = window.location.hostname === "localhost" ? "127.0.0.1" : window.location.hostname;
+  const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+  const wsUrl = `${wsProtocol}://${wsHost}:8000/ws/design`;
   const { send } = useWebSocket(wsUrl, dispatch);
 
   const handleSubmit = (prompt) => {
