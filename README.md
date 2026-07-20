@@ -31,9 +31,10 @@ neuralforge/
 ## Quick Start
 
 ```bash
-cd /Users/jv/Downloads/neuralforge
+git clone https://github.com/jishnuvenugopal/neuralforge.git
+cd neuralforge
 export GEMINI_API_KEY="your-key"
-export GEMINI_MODEL="gemini-3.1-flash-lite-preview"
+export GEMINI_MODEL="gemini-3.1-flash-lite"
 bash start.sh
 ```
 
@@ -48,6 +49,6 @@ export LIBRELANE_AUTO_HARDEN=1
 
 ## Notes
 
-- Use `/opt/homebrew/bin/python3.12` on this machine, not the system Python.
+- Python 3.12 recommended. Create a virtual environment before installing dependencies.
 - The visible demo path is BOM -> RTL -> synthesis -> simulation.
 - LibreLane hardening is available as an optional advanced step.
