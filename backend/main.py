@@ -11,14 +11,15 @@ from google.genai import types
 
 from eda_tools import (
     synthesize,
-    simulate,
+    simulate_reference,
     generate_netlist_svg,
     check_tools,
     prepare_librelane_design,
     run_librelane_flow,
 )
+from golden import load_network, network_params, port_contract, tensor_params
 from prompts import SYSTEM_PROMPT, TOOL_DECLARATIONS, PRESET_PROMPTS
-from model_trainer import weights_to_verilog_params
+from verifier import Ledger
 
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
 
@@ -229,8 +230,22 @@ async def presets():
 # Function-call handler
 # ---------------------------------------------------------------------------
 
-async def handle_function_call(websocket: WebSocket, fn_name: str, fn_args: dict, iteration: int, weights_info: str = ""):
-    """Handle a Gemini function call, run EDA tools, send results to client."""
+async def handle_function_call(
+    websocket: WebSocket,
+    fn_name: str,
+    fn_args: dict,
+    iteration: int,
+    weights_info: str = "",
+    ledger: Ledger | None = None,
+    net=None,
+):
+    """Handle a Gemini function call, run EDA tools, send results to client.
+
+    `ledger` records which exact code passed synthesis and simulation; `net` is
+    the golden reference for the preset (None when there is no reference).
+    """
+    if ledger is None:
+        ledger = Ledger()
 
     if fn_name == "analyze_model":
         msg = (
@@ -263,15 +278,21 @@ async def handle_function_call(websocket: WebSocket, fn_name: str, fn_args: dict
         })
 
         synth_result = synthesize(verilog_code, module_name)
+        digest = ""
+        if synth_result["success"]:
+            digest = ledger.record_synthesis(module_name, verilog_code, synth_result.get("stats", {}))
 
         # Generate netlist SVG
-        svg_result = generate_netlist_svg(verilog_code, module_name)
+        svg_result = generate_netlist_svg(verilog_code, module_name) if synth_result["success"] else {}
 
         synth_msg = {
             "type": "block_synth_result",
             "block_name": module_name,
             "stats": synth_result.get("stats", {}),
             "success": synth_result.get("success", False),
+            "error": synth_result.get("error", ""),
+            "gate_problems": synth_result.get("gate_problems", []),
+            "sha256": digest,
             "log_tail": synth_result.get("log_tail", ""),
             "svg": svg_result.get("svg", ""),
             "iteration": iteration,
@@ -281,7 +302,11 @@ async def handle_function_call(websocket: WebSocket, fn_name: str, fn_args: dict
         if synth_result["success"]:
             return {
                 "status": "success",
-                "message": f"Synthesis succeeded! Stats: {json.dumps(synth_result.get('stats', {}))}. Now call simulate_verilog with a testbench.",
+                "message": (
+                    f"Synthesis gate passed (sha256 {digest[:12]}). Stats: {json.dumps(synth_result.get('stats', {}))}. "
+                    f"Now call simulate_verilog with module_name={module_name}. NeuralForge writes the testbench "
+                    "from the reference model and simulates exactly this code."
+                ),
             }
         else:
             return {
@@ -291,35 +316,64 @@ async def handle_function_call(websocket: WebSocket, fn_name: str, fn_args: dict
 
     elif fn_name == "simulate_verilog":
         module_name = fn_args.get("module_name", "design")
-        verilog_code = fn_args.get("verilog_code", "")
-        testbench_code = fn_args.get("testbench_code", "")
 
-        if not verilog_code or not testbench_code:
-            return {"status": "error", "message": "Both verilog_code and testbench_code are required."}
+        if net is None:
+            reason = (
+                "No reference model exists for this design, so NeuralForge cannot verify it. "
+                "Synthesis results stand; simulation and hardening are skipped."
+            )
+            await ws_send(websocket, {
+                "type": "simulation_result",
+                "passed": False,
+                "verdict": "unverified",
+                "pass_count": 0,
+                "total_count": 0,
+                "reason": reason,
+                "output": reason,
+                "iteration": iteration,
+            })
+            return {"status": "unverified", "message": reason + " Stop here and summarize the synthesis results."}
+
+        digest, verilog_code, error = ledger.design_for_simulation(module_name, fn_args.get("verilog_code") or None)
+        if error:
+            return {"status": "error", "message": error}
 
         await ws_send(websocket, {
             "type": "status",
-            "message": f"Simulating {module_name} with iverilog...",
+            "message": f"Simulating {module_name} against the {net.name} reference ({len(net.inputs)} vectors)...",
         })
 
-        sim_result = simulate(verilog_code, testbench_code, module_name)
+        sim_result = simulate_reference(verilog_code, module_name, net)
+        passed = bool(sim_result.get("success") and sim_result.get("passed"))
+        reason = sim_result.get("reason") or sim_result.get("error", "")
 
         await ws_send(websocket, {
             "type": "simulation_result",
-            "passed": sim_result.get("passed", False),
+            "passed": passed,
+            "verdict": "passed" if passed else "failed",
             "pass_count": sim_result.get("pass_count", 0),
             "total_count": sim_result.get("total_count", 0),
+            "reason": reason,
+            "mismatches": sim_result.get("mismatches", []),
+            "sha256": digest,
+            "testbench": sim_result.get("testbench", ""),
             "output": sim_result.get("output", ""),
             "iteration": iteration,
         })
 
         hardening_result = None
-        if sim_result.get("passed"):
-            hardening_result = await maybe_run_librelane_hardening(websocket, module_name, verilog_code)
+        if passed:
+            ledger.record_simulation_pass(digest)
+            if ledger.hardenable(digest):
+                hardening_result = await maybe_run_librelane_hardening(websocket, module_name, verilog_code)
 
         return {
-            "status": "success" if sim_result.get("passed") else "failed",
-            "simulation": sim_result,
+            "status": "success" if passed else "failed",
+            "reason": reason,
+            "pass_count": sim_result.get("pass_count", 0),
+            "total_count": sim_result.get("total_count", 0),
+            "mismatches": sim_result.get("mismatches", [])[:5],
+            "compiler_output": "" if sim_result.get("success") else sim_result.get("output", "")[:1500],
             "hardening": hardening_result,
         }
 
@@ -342,13 +396,24 @@ async def run_agent_loop(websocket: WebSocket, user_prompt: str):
 
     # --- Inject trained weights into prompt ---
     keyword, weights = detect_and_load_weights(user_prompt)
+    net = load_network(keyword)
+    ledger = Ledger()
     weights_info = ""
-    if weights is not None:
-        verilog_params = weights_to_verilog_params(weights, prefix="W")
+    if net is not None:
         weights_info = weight_summary(weights)
         user_prompt += (
-            f"\n\nHere are the actual trained INT8 weights to hardcode:\n```\n{verilog_params}\n```"
+            "\n\nHere are the trained network's constants to hardcode (INT8 weights; biases already "
+            "rescaled to each layer's 32-bit accumulator):"
+            f"\n```\n{network_params(net)}\n```"
+            f"\n\nInputs are INT8 at scale {net.input_scale:g}. Weight summary: {weights_info}"
+            f"\n\n{port_contract(net)}"
+        )
+    elif weights is not None:
+        weights_info = weight_summary(weights)
+        user_prompt += (
+            f"\n\nHere are the INT8 weights to hardcode:\n```\n{tensor_params(weights)}\n```"
             f"\n\nWeight summary: {weights_info}"
+            "\n\nThere is no reference model for this design: NeuralForge will synthesize it but cannot verify it."
         )
 
     messages = [{"role": "user", "parts": [{"text": user_prompt}]}]
@@ -452,7 +517,8 @@ async def run_agent_loop(websocket: WebSocket, user_prompt: str):
                 })
 
                 fn_result = await handle_function_call(
-                    websocket, fn_name, fn_args, iteration, weights_info=weights_info
+                    websocket, fn_name, fn_args, iteration,
+                    weights_info=weights_info, ledger=ledger, net=net,
                 )
 
                 if fn_name == "analyze_model":
@@ -460,8 +526,9 @@ async def run_agent_loop(websocket: WebSocket, user_prompt: str):
                 elif fn_name == "synthesize_verilog":
                     pending_tool = "simulate_verilog" if fn_result.get("status") == "success" else "synthesize_verilog"
                 elif fn_name == "simulate_verilog":
-                    pending_tool = None if fn_result.get("status") == "success" else "fix_error_or_retry"
-                    if fn_result.get("status") == "success":
+                    done = fn_result.get("status") in ("success", "unverified")
+                    pending_tool = None if done else "fix_error_or_retry"
+                    if done:
                         finish_after_tool_batch = True
                 elif fn_name == "fix_error":
                     pending_tool = "simulate_verilog" if fn_args.get("step") == "simulation" else "synthesize_verilog"
@@ -498,16 +565,16 @@ async def run_agent_loop(websocket: WebSocket, user_prompt: str):
             elif pending_tool == "simulate_verilog" and tool_nudges["simulate_verilog"] < 2:
                 tool_nudges["simulate_verilog"] += 1
                 nudge_text = (
-                    "You must continue the workflow by calling simulate_verilog now. "
-                    "Provide BOTH the complete design Verilog and the complete "
-                    "iverilog-compatible testbench in the function parameters."
+                    "You must continue the workflow by calling simulate_verilog now "
+                    "with the module_name of the design that passed synthesis. "
+                    "NeuralForge writes the testbench itself."
                 )
             elif pending_tool == "fix_error_or_retry" and tool_nudges["fix_error_or_retry"] < 2:
                 tool_nudges["fix_error_or_retry"] += 1
                 nudge_text = (
                     "The previous synthesis or simulation attempt did not succeed. "
-                    "Continue by calling fix_error or by resubmitting corrected code with "
-                    "synthesize_verilog or simulate_verilog. Do not stop yet."
+                    "Fix the design and resubmit the corrected code with synthesize_verilog, "
+                    "then call simulate_verilog again. Do not stop yet."
                 )
 
             if nudge_text:

@@ -132,6 +132,30 @@ def train_iris() -> dict:
     return weights_dict
 
 
+def export_iris_inputs() -> dict:
+    """Quantize the standardized Iris samples to INT8 and save them for the golden reference."""
+    from sklearn.datasets import load_iris
+    from sklearn.preprocessing import StandardScaler
+
+    iris = load_iris()
+    X_np = StandardScaler().fit_transform(iris.data)
+    scale = 127.0 / np.max(np.abs(X_np))
+    quantized = np.clip(np.round(X_np * scale), -127, 127).astype(int)
+
+    inputs_dict = {
+        "input_scale": float(scale),
+        "inputs": quantized.tolist(),
+        "labels": iris.target.astype(int).tolist(),
+    }
+
+    out_path = os.path.join(CACHE_DIR, "iris_inputs.json")
+    with open(out_path, "w") as f:
+        json.dump(inputs_dict, f)
+    print(f"[Iris] {len(quantized)} quantized samples saved to {out_path}")
+
+    return inputs_dict
+
+
 def define_attention_weights() -> dict:
     """Create random INT8 weight matrices for a demo attention layer."""
     np.random.seed(42)
@@ -155,42 +179,6 @@ def define_attention_weights() -> dict:
     return weights_dict
 
 
-def weights_to_verilog_params(weights: dict, prefix: str = "W") -> str:
-    """Convert a weights dict into Verilog localparam declarations."""
-    lines = []
-    for name, entry in weights.items():
-        values = entry["values"]
-        # Determine layer identifier from parameter name (e.g. "0.weight" -> "L0")
-        parts = name.replace(".", "_").split("_")
-        layer_id = parts[0] if parts[0].isdigit() else name.replace(".", "_")
-
-        if isinstance(values[0], list):
-            # 2D weight matrix
-            for row_idx, row in enumerate(values):
-                for col_idx, val in enumerate(row):
-                    val = int(val)
-                    if val < 0:
-                        val_str = f"-8'sd{abs(val)}"
-                    else:
-                        val_str = f"8'sd{val}"
-                    lines.append(
-                        f"localparam signed [7:0] {prefix}_L{layer_id}_{row_idx}_{col_idx} = {val_str};"
-                    )
-        else:
-            # 1D bias vector
-            for idx, val in enumerate(values):
-                val = int(val)
-                if val < 0:
-                    val_str = f"-8'sd{abs(val)}"
-                else:
-                    val_str = f"8'sd{val}"
-                lines.append(
-                    f"localparam signed [7:0] {prefix}_L{layer_id}_{idx}_0 = {val_str};"
-                )
-
-    return "\n".join(lines)
-
-
 if __name__ == "__main__":
     # Ensure cache directory exists
     os.makedirs(CACHE_DIR, exist_ok=True)
@@ -205,6 +193,7 @@ if __name__ == "__main__":
     print("Training Iris model...")
     print("=" * 50)
     iris_weights = train_iris()
+    export_iris_inputs()
 
     print()
     print("=" * 50)
@@ -226,6 +215,7 @@ if __name__ == "__main__":
     print("=" * 50)
     print("Verilog localparam preview (XOR, first 10 lines):")
     print("=" * 50)
-    verilog_str = weights_to_verilog_params(xor_weights, prefix="W")
+    from golden import load_network, network_params
+    verilog_str = network_params(load_network("xor"))
     for line in verilog_str.split("\n")[:10]:
         print(line)

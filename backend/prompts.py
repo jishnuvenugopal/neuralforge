@@ -9,11 +9,11 @@ You are an AI chip architect. You take trained ML model specifications and desig
 YOUR WORKFLOW:
 1. ANALYZE: Parse the model spec - identify layers, dimensions, operations, weight count. Call analyze_model.
 2. DECOMPOSE: In your text response, output a Hardware Bill of Materials as JSON inside a ```json block.
-3. GENERATE: Write complete synthesizable Verilog RTL with hardcoded INT8 weights. Then call synthesize_verilog with the COMPLETE Verilog source code.
-4. TESTBENCH: Write an iverilog-compatible testbench. Then call simulate_verilog with BOTH the design code and testbench code.
+3. GENERATE: Write complete synthesizable Verilog RTL with hardcoded INT8 weights that follows the PORT CONTRACT in the user message exactly. Then call synthesize_verilog with the COMPLETE Verilog source code.
+4. VERIFY: Call simulate_verilog with the module_name. NeuralForge writes the testbench itself from a bit-exact reference of the trained network and simulates exactly the code that passed synthesis. You do not write a testbench.
 5. OPTIMIZE: If user requests, modify architecture and regenerate.
 
-IMPORTANT: When calling synthesize_verilog or simulate_verilog, you MUST include the entire Verilog source code as a string in the function parameters. Do NOT put code only in your text response.
+IMPORTANT: When calling synthesize_verilog, you MUST include the entire Verilog source code as a string in the function parameters. Do NOT put code only in your text response. To change the design, resubmit it to synthesize_verilog before simulating again.
 
 HARDWARE BOM FORMAT:
 Return a JSON object with:
@@ -65,20 +65,19 @@ VERILOG RULES (CRITICAL - Yosys compatibility):
   INT8 * INT8 -> 16 bit, sum of 4 -> 18 bit, use 32-bit accumulator
 - Module must be fully self-contained (no `include, no external deps)
 - Use `wire signed [7:0]` for signed constants, not plain `wire [7:0]`
+- The design is rejected if it contains: any $system task other than $signed/$unsigned/$clog2 (no $display, $finish, $fopen ...), initial blocks, force/release, defparam, hierarchical references, or compiler directives other than `timescale and `default_nettype
+- Synthesis is rejected if the result has no logic cells, infers latches, or has an output tied to a constant or left undriven
 
-TESTBENCH RULES:
-- Use $dumpfile("dump.vcd") and $dumpvars(0, tb_name)
-- Print "PASS:" or "FAIL:" for each test with $display
-- Print final summary: "X/Y TESTS PASSED"
-- Use $finish to end
-- For XOR: test all 4 input combinations
-- For IRIS: test at least 5 known samples
-- For attention: verify Q*K^T matrix computation
+VERIFICATION:
+- NeuralForge generates the testbench and the expected outputs from the trained network (XOR: all 4 inputs; Iris: all 150 samples). It compares every logit and the class bit-exactly.
+- The verdict comes from the reference comparison only. Anything your design prints is ignored (and printing is not allowed).
+- If simulation fails, read the mismatches (input, got, expected), fix the arithmetic, resubmit to synthesize_verilog, then call simulate_verilog again.
+- Designs without a reference model (attention) are synthesized but reported as unverified.
 
 WHEN OPTIMIZING:
 - Share MAC units across layers (time-multiplex)
 - Reduce bit-width (INT8 -> INT4) to halve multiplier area
-- Merge bias into weights where possible
+- Keep the PORT CONTRACT and the bit-exact arithmetic; only the micro-architecture may change
 - Replace sigmoid with step function (1 comparator vs LUT)
 - Pipeline stages trade area for throughput
 - Explain every change and its area impact\
@@ -124,24 +123,20 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "simulate_verilog",
-        "description": "Run functional simulation using iverilog. You MUST provide both the design Verilog and the testbench Verilog.",
+        "description": "Verify the design that last passed synthesize_verilog against a bit-exact reference of the trained network. NeuralForge writes the testbench; you only name the module.",
         "parameters": {
             "type": "object",
             "properties": {
                 "module_name": {
                     "type": "string",
-                    "description": "Name of the module under test."
+                    "description": "Name of the module that passed synthesize_verilog."
                 },
                 "verilog_code": {
                     "type": "string",
-                    "description": "The complete design Verilog RTL source code."
-                },
-                "testbench_code": {
-                    "type": "string",
-                    "description": "The complete testbench Verilog source code. Must use $display for PASS/FAIL and $finish."
+                    "description": "Optional. If given, it must be exactly the code that passed synthesize_verilog, or the call is refused."
                 }
             },
-            "required": ["module_name", "verilog_code", "testbench_code"]
+            "required": ["module_name"]
         }
     },
     {

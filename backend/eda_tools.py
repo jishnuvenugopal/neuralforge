@@ -11,8 +11,13 @@ import re
 import json
 import shlex
 import base64
+import secrets
 
 from pathlib import Path as _Path
+
+from golden import Network
+from verifier import check_netlist, make_testbench, parse_results, scan_source, valid_module_name, vector_file
+
 _PROJECT_ROOT = _Path(__file__).resolve().parent.parent
 SKY130_LIB_PATH = str(_PROJECT_ROOT / "pdk" / "sky130.lib")
 LIBRELANE_ROOT = _Path(os.environ.get("LIBRELANE_ROOT", str(_PROJECT_ROOT.parent / "librelane")))
@@ -22,6 +27,8 @@ LIBRELANE_TIMEOUT_SEC = int(os.environ.get("LIBRELANE_TIMEOUT_SEC", "1800"))
 NIX_PROFILE_BIN = _Path(os.environ.get("NIX_PROFILE_BIN", "/nix/var/nix/profiles/default/bin"))
 LIBRELANE_DEFAULT_CLOCK_PERIOD_NS = int(os.environ.get("LIBRELANE_DEFAULT_CLOCK_PERIOD_NS", "10"))
 LIBRELANE_DEFAULT_DIE_AREA = json.loads(os.environ.get("LIBRELANE_DEFAULT_DIE_AREA", "[0, 0, 600, 600]"))
+SYNTH_TIMEOUT_SEC = int(os.environ.get("NEURALFORGE_SYNTH_TIMEOUT_SEC", "120"))
+SIM_TIMEOUT_SEC = int(os.environ.get("NEURALFORGE_SIM_TIMEOUT_SEC", "30"))
 
 
 def _resolve_command(command: str) -> str | None:
@@ -118,83 +125,127 @@ def _detect_clock_port(verilog_code: str) -> str | None:
     return None
 
 
+def _invalid_name_result(module_name: str) -> dict:
+    return {
+        "success": False,
+        "error": f"Invalid module name {module_name!r}: use letters, digits and underscores, starting with a letter.",
+        "log_tail": "",
+    }
+
+
+def _parse_stat(stdout: str) -> dict:
+    """Parse `stat -liberty` output (Yosys 0.4x table format and the older 'Number of' format)."""
+    def last_int(*patterns):
+        for pattern in patterns:
+            matches = re.findall(pattern, stdout, re.MULTILINE)
+            if matches:
+                return int(matches[-1])
+        return 0
+
+    area_um2 = 0.0
+    area_matches = re.findall(r"Chip area for module.*?:\s+([\d.]+)", stdout)
+    if area_matches:
+        area_um2 = float(area_matches[-1])
+
+    total_cells = last_int(r"^\s*(\d+)\s+\S+\s+cells\s*$", r"Number of cells:\s+(\d+)")
+    wires = last_int(r"^\s*(\d+)\s+(?:-\s+)?wires\s*$", r"Number of wires:\s+(\d+)")
+
+    # Every sky130 flip-flop: dfxtp, dfrtp (reset), dfstp (set), dfbbp, edfxtp, sdfxtp, ...
+    flip_flops = 0
+    for count, cell in re.findall(r"^\s*(\d+)\s+(?:\S+\s+)?sky130_fd_sc_hd__(\w+)\s*$", stdout, re.MULTILINE):
+        if re.match(r"(s?e?df)", cell):
+            flip_flops += int(count)
+
+    return {
+        "total_cells": total_cells,
+        "flip_flops": flip_flops,
+        "area_um2": area_um2,
+        "wires": wires,
+    }
+
+
 def synthesize(verilog_code: str, module_name: str) -> dict:
-    """Run Yosys synthesis with SKY130 PDK and return area/cell/FF stats."""
+    """Run the synthesis gate: source scan, Yosys + SKY130 mapping, and netlist checks.
+
+    `success` is True only when Yosys succeeds AND the design has logic cells,
+    no latches, and no constant or undriven outputs.
+    """
+    if not valid_module_name(module_name):
+        return _invalid_name_result(module_name)
+
+    problems = scan_source(verilog_code, module_name)
+    if problems:
+        return {
+            "success": False,
+            "error": "Design rejected before synthesis: " + "; ".join(problems),
+            "gate_problems": problems,
+            "log_tail": "",
+        }
+
     try:
-        verilog_path = f"/tmp/{module_name}.v"
-        stats_json_path = f"/tmp/{module_name}_stats.json"
+        with tempfile.TemporaryDirectory(prefix=f"nf_synth_{module_name}_") as work:
+            verilog_path = os.path.join(work, "design.v")
+            generic_json_path = os.path.join(work, "generic.json")
+            with open(verilog_path, "w") as f:
+                f.write(verilog_code)
 
-        with open(verilog_path, "w") as f:
-            f.write(verilog_code)
+            # Full ABC mapping gives the honest area; on large designs (a fully
+            # parallel Iris network) it can take minutes, so fall back to
+            # `abc -fast` and say so in the stats.
+            abc_mode = "full"
+            for abc_flags in ("", "-fast "):
+                yosys_script = "; ".join([
+                    f"read_verilog {verilog_path}",
+                    f"synth -flatten -top {module_name}",
+                    f"write_json {generic_json_path}",
+                    f"dfflibmap -liberty {SKY130_LIB_PATH}",
+                    f"abc {abc_flags}-liberty {SKY130_LIB_PATH}",
+                    f"stat -liberty {SKY130_LIB_PATH}",
+                ])
+                try:
+                    result = subprocess.run(
+                        ["yosys", "-p", yosys_script],
+                        capture_output=True,
+                        text=True,
+                        timeout=SYNTH_TIMEOUT_SEC,
+                    )
+                    break
+                except subprocess.TimeoutExpired:
+                    if abc_flags:
+                        raise
+                    abc_mode = "fast"
 
-        yosys_script = "; ".join([
-            f"read_verilog {verilog_path}",
-            f"synth -top {module_name}",
-            f"dfflibmap -liberty {SKY130_LIB_PATH}",
-            f"abc -liberty {SKY130_LIB_PATH}",
-            f"stat -liberty {SKY130_LIB_PATH}",
-            f"write_json {stats_json_path}",
-        ])
+            stdout = result.stdout
+            log_tail = _tail_text(stdout, lines=30)
 
-        result = subprocess.run(
-            ["yosys", "-p", yosys_script],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+            if result.returncode != 0:
+                return {
+                    "success": False,
+                    "error": result.stderr.strip() or _tail_text(stdout, lines=10) or "Yosys exited with non-zero return code",
+                    "log_tail": log_tail,
+                }
 
-        stdout = result.stdout
-        stderr = result.stderr
-        log_lines = stdout.strip().split("\n")
-        log_tail = "\n".join(log_lines[-30:])
+            stats = _parse_stat(stdout)
+            stats["abc_mode"] = abc_mode
+            with open(generic_json_path) as f:
+                netlist = json.load(f)
 
-        if result.returncode != 0:
+        problems = check_netlist(netlist, module_name, stdout)
+        if stats["total_cells"] == 0:
+            problems.insert(0, "no logic cells after synthesis (the design is constant or empty)")
+
+        if problems:
             return {
                 "success": False,
-                "error": stderr.strip() or "Yosys exited with non-zero return code",
+                "error": "Synthesis gate failed: " + "; ".join(problems),
+                "gate_problems": problems,
+                "stats": stats,
                 "log_tail": log_tail,
             }
 
-        # Parse area
-        area_um2 = 0.0
-        area_match = re.search(r"Chip area for module.*?:\s+([\d.]+)", stdout)
-        if area_match:
-            area_um2 = float(area_match.group(1))
-
-        # Parse total cells: line like "   18  195.187 cells"
-        # In Yosys stat -liberty output, the summary line ends with "cells"
-        total_cells = 0
-        cells_match = re.search(r"^\s*(\d+)\s+[\d.]+\s+cells\s*$", stdout, re.MULTILINE)
-        if cells_match:
-            total_cells = int(cells_match.group(1))
-        else:
-            # Fallback: "Number of cells:" line
-            cells_match2 = re.search(r"Number of cells:\s+(\d+)", stdout)
-            if cells_match2:
-                total_cells = int(cells_match2.group(1))
-
-        # Count flip-flops: lines containing "dfxtp"
-        flip_flops = 0
-        for line in log_lines:
-            if "sky130_fd_sc_hd__dfxtp" in line:
-                ff_match = re.match(r"^\s*(\d+)\s+", line)
-                if ff_match:
-                    flip_flops += int(ff_match.group(1))
-
-        # Parse wires
-        wires = 0
-        wires_match = re.search(r"Number of wires:\s+(\d+)", stdout)
-        if wires_match:
-            wires = int(wires_match.group(1))
-
         return {
             "success": True,
-            "stats": {
-                "total_cells": total_cells,
-                "flip_flops": flip_flops,
-                "area_um2": area_um2,
-                "wires": wires,
-            },
+            "stats": stats,
             "log_tail": log_tail,
             "pdk_used": "sky130_fd_sc_hd",
         }
@@ -202,7 +253,7 @@ def synthesize(verilog_code: str, module_name: str) -> dict:
     except subprocess.TimeoutExpired:
         return {
             "success": False,
-            "error": "Yosys synthesis timed out after 60 seconds",
+            "error": f"Yosys synthesis timed out twice ({SYNTH_TIMEOUT_SEC} s each, full and fast ABC)",
             "log_tail": "",
         }
     except Exception as e:
@@ -213,72 +264,101 @@ def synthesize(verilog_code: str, module_name: str) -> dict:
         }
 
 
-def simulate(verilog_code: str, testbench_code: str, module_name: str) -> dict:
-    """Compile and run a Verilog testbench with iverilog/vvp."""
+def simulate_reference(verilog_code: str, module_name: str, net: Network) -> dict:
+    """Simulate the design against the golden reference with a NeuralForge-written testbench.
+
+    The verdict comes from the testbench's result file (checked against a
+    per-run nonce) compared with the bit-exact reference. Simulator stdout is
+    returned for display only.
+    """
+    if not valid_module_name(module_name):
+        return _invalid_name_result(module_name)
+
+    total = len(net.inputs)
+    problems = scan_source(verilog_code, module_name)
+    if problems:
+        return {
+            "success": False,
+            "passed": False,
+            "pass_count": 0,
+            "total_count": total,
+            "error": "Design rejected before simulation: " + "; ".join(problems),
+            "output": "",
+        }
+
     try:
-        verilog_path = f"/tmp/{module_name}.v"
-        tb_path = f"/tmp/{module_name}_tb.v"
-        sim_path = f"/tmp/{module_name}_sim"
+        with tempfile.TemporaryDirectory(prefix=f"nf_sim_{module_name}_") as work:
+            nonce = secrets.token_hex(8)
+            verilog_path = os.path.join(work, "design.v")
+            tb_path = os.path.join(work, "testbench.v")
+            vector_path = os.path.join(work, "vectors.hex")
+            result_path = os.path.join(work, f"result_{nonce}.txt")
+            sim_path = os.path.join(work, "sim.vvp")
 
-        with open(verilog_path, "w") as f:
-            f.write(verilog_code)
-        with open(tb_path, "w") as f:
-            f.write(testbench_code)
+            testbench = make_testbench(net, module_name, nonce, vector_path, result_path)
+            with open(verilog_path, "w") as f:
+                f.write(verilog_code)
+            with open(tb_path, "w") as f:
+                f.write(testbench)
+            with open(vector_path, "w") as f:
+                f.write(vector_file(net))
 
-        # Compile
-        compile_result = subprocess.run(
-            ["iverilog", "-o", sim_path, verilog_path, tb_path],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+            compile_result = subprocess.run(
+                ["iverilog", "-g2005", "-s", f"nf_tb_{nonce}", "-o", sim_path, verilog_path, tb_path],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if compile_result.returncode != 0:
+                return {
+                    "success": False,
+                    "passed": False,
+                    "pass_count": 0,
+                    "total_count": total,
+                    "error": "Compilation failed",
+                    "output": compile_result.stderr.strip(),
+                }
 
-        if compile_result.returncode != 0:
-            return {
-                "success": False,
-                "error": "Compilation failed",
-                "output": compile_result.stderr.strip(),
-            }
+            sim_result = subprocess.run(
+                ["vvp", "-n", sim_path],
+                cwd=work,
+                capture_output=True,
+                text=True,
+                timeout=SIM_TIMEOUT_SEC,
+            )
 
-        # Run simulation
-        sim_result = subprocess.run(
-            ["vvp", sim_path],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+            result_text = ""
+            if os.path.exists(result_path):
+                with open(result_path) as f:
+                    result_text = f.read()
 
-        stdout = sim_result.stdout
-
-        summary_match = re.search(r"(\d+)\s*/\s*(\d+)\s+TESTS?\s+PASSED", stdout, re.IGNORECASE)
-        if summary_match:
-            pass_count = int(summary_match.group(1))
-            total_count = int(summary_match.group(2))
-            fail_count = max(total_count - pass_count, 0)
-        else:
-            pass_count = len(re.findall(r"\bPASS(?:ED)?\b", stdout, re.IGNORECASE))
-            fail_count = len(re.findall(r"\bFAIL(?:ED)?\b", stdout, re.IGNORECASE))
-            total_count = pass_count + fail_count
-
-        passed = fail_count == 0 and pass_count > 0
+        verdict = parse_results(result_text, net, nonce)
+        if sim_result.returncode != 0:
+            verdict["passed"] = False
+            verdict["reason"] = f"vvp exited with code {sim_result.returncode}; " + verdict["reason"]
 
         return {
             "success": True,
-            "passed": passed,
-            "pass_count": pass_count,
-            "total_count": total_count,
-            "output": stdout,
+            **verdict,
+            "output": _tail_text(sim_result.stdout, sim_result.stderr, lines=40),
+            "testbench": testbench,
         }
 
     except subprocess.TimeoutExpired:
         return {
             "success": False,
-            "error": "Simulation timed out after 30 seconds",
+            "passed": False,
+            "pass_count": 0,
+            "total_count": total,
+            "error": f"Simulation timed out after {SIM_TIMEOUT_SEC} seconds",
             "output": "",
         }
     except Exception as e:
         return {
             "success": False,
+            "passed": False,
+            "pass_count": 0,
+            "total_count": total,
             "error": str(e),
             "output": "",
         }
@@ -286,72 +366,80 @@ def simulate(verilog_code: str, testbench_code: str, module_name: str) -> dict:
 
 def generate_netlist_svg(verilog_code: str, module_name: str) -> dict:
     """Generate an SVG netlist diagram using Yosys + netlistsvg."""
+    if not valid_module_name(module_name):
+        return _invalid_name_result(module_name)
+
     try:
-        verilog_path = f"/tmp/{module_name}.v"
-        net_json_path = f"/tmp/{module_name}_net.json"
-        svg_path = f"/tmp/{module_name}_netlist.svg"
+        with tempfile.TemporaryDirectory(prefix=f"nf_svg_{module_name}_") as work:
+            verilog_path = os.path.join(work, "design.v")
+            net_json_path = os.path.join(work, "net.json")
+            svg_prefix = os.path.join(work, "netlist")
+            svg_path = f"{svg_prefix}.svg"
 
-        with open(verilog_path, "w") as f:
-            f.write(verilog_code)
+            with open(verilog_path, "w") as f:
+                f.write(verilog_code)
 
-        # Run Yosys to produce JSON netlist
-        yosys_script = "; ".join([
-            f"read_verilog {verilog_path}",
-            f"prep -top {module_name} -flatten",
-            f"write_json {net_json_path}",
-        ])
-
-        yosys_result = subprocess.run(
-            ["yosys", "-p", yosys_script],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if yosys_result.returncode != 0:
-            return {
-                "success": False,
-                "error": f"Yosys failed: {yosys_result.stderr.strip()}",
-            }
-
-        # Try netlistsvg first
-        svg_result = subprocess.run(
-            ["netlistsvg", net_json_path, "-o", svg_path],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if svg_result.returncode != 0:
-            # Fallback: use Yosys show command to produce SVG
-            fallback_script = "; ".join([
+            # Run Yosys to produce JSON netlist
+            yosys_script = "; ".join([
                 f"read_verilog {verilog_path}",
                 f"prep -top {module_name} -flatten",
-                f"show -format svg -prefix /tmp/{module_name}_netlist",
+                f"write_json {net_json_path}",
             ])
 
-            fallback_result = subprocess.run(
-                ["yosys", "-p", fallback_script],
+            yosys_result = subprocess.run(
+                ["yosys", "-p", yosys_script],
                 capture_output=True,
                 text=True,
                 timeout=30,
             )
 
-            if fallback_result.returncode != 0:
+            if yosys_result.returncode != 0:
                 return {
                     "success": False,
-                    "error": f"netlistsvg and Yosys show both failed: {fallback_result.stderr.strip()}",
+                    "error": f"Yosys failed: {yosys_result.stderr.strip()}",
                 }
 
-        # Read the SVG file
-        if not os.path.exists(svg_path):
-            return {
-                "success": False,
-                "error": f"SVG file was not created at {svg_path}",
-            }
+            # Try netlistsvg first
+            svg_ok = False
+            if _has_command("netlistsvg"):
+                svg_result = subprocess.run(
+                    ["netlistsvg", net_json_path, "-o", svg_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                svg_ok = svg_result.returncode == 0
 
-        with open(svg_path, "r") as f:
-            svg_content = f.read()
+            if not svg_ok:
+                # Fallback: use Yosys show command to produce SVG
+                fallback_script = "; ".join([
+                    f"read_verilog {verilog_path}",
+                    f"prep -top {module_name} -flatten",
+                    f"show -format svg -prefix {svg_prefix}",
+                ])
+
+                fallback_result = subprocess.run(
+                    ["yosys", "-p", fallback_script],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+
+                if fallback_result.returncode != 0:
+                    return {
+                        "success": False,
+                        "error": f"netlistsvg and Yosys show both failed: {fallback_result.stderr.strip()}",
+                    }
+
+            # Read the SVG file
+            if not os.path.exists(svg_path):
+                return {
+                    "success": False,
+                    "error": "SVG file was not created",
+                }
+
+            with open(svg_path, "r") as f:
+                svg_content = f.read()
 
         return {
             "success": True,
@@ -378,10 +466,10 @@ def prepare_librelane_design(
 ) -> dict:
     """Materialize a temporary LibreLane design workspace from generated RTL."""
     try:
-        if not module_name:
+        if not valid_module_name(module_name):
             return {
                 "success": False,
-                "error": "module_name is required",
+                "error": f"Invalid module name {module_name!r}",
             }
 
         if not verilog_code.strip():

@@ -171,7 +171,10 @@ function reducer(state, action) {
           ...state.messages,
           {
             type: "sim",
-            text: `Simulation: ${action.pass_count}/${action.total_count} tests passed`,
+            text:
+              action.verdict === "unverified"
+                ? "Simulation: not verified (no reference model)"
+                : `Simulation: ${action.pass_count}/${action.total_count} vectors match the reference`,
             time: new Date(),
           },
         ],
@@ -943,10 +946,17 @@ function SimulationPanel({ simulation }) {
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-medium text-muted-foreground">Functional simulation</p>
+            <p className="text-sm font-medium text-muted-foreground">Check against the trained network</p>
             <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-              {simulation.passed ? "All tests passed" : "Simulation failed"}
+              {simulation.passed
+                ? "Bit-exact match"
+                : simulation.verdict === "unverified"
+                  ? "Not verified"
+                  : "Simulation failed"}
             </p>
+            {simulation.reason ? (
+              <p className="mt-1 text-sm text-muted-foreground">{simulation.reason}</p>
+            ) : null}
           </div>
           <Badge tone={simulation.passed ? "success" : "destructive"}>
             {simulation.pass_count}/{simulation.total_count} tests
@@ -955,9 +965,20 @@ function SimulationPanel({ simulation }) {
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-2">
-        <MetricTile label="Passing tests" value={simulation.pass_count || 0} hint="Assertions satisfied" tone="emerald" />
-        <MetricTile label="Total tests" value={simulation.total_count || 0} hint="Executed cases" tone="sky" />
+        <MetricTile label="Matching vectors" value={simulation.pass_count || 0} hint="Bit-exact vs reference" tone="emerald" />
+        <MetricTile label="Total vectors" value={simulation.total_count || 0} hint="Reference inputs driven" tone="sky" />
       </div>
+
+      {simulation.mismatches?.length ? (
+        <div className="mt-5 rounded-xl border border-border bg-background p-4 shadow-sm">
+          <p className="text-sm font-medium text-foreground">First mismatches</p>
+          <pre className="mt-4 max-h-[240px] overflow-auto rounded-lg bg-slate-950 p-4 font-mono text-sm leading-6 text-slate-200 whitespace-pre-wrap">
+            {simulation.mismatches
+              .map((m) => `vector ${m.vector} x=[${m.input.join(", ")}]: ${m.detail}`)
+              .join("\n")}
+          </pre>
+        </div>
+      ) : null}
 
       <div className="mt-5 rounded-xl border border-border bg-background p-4 shadow-sm">
         <p className="text-sm font-medium text-foreground">Transcript</p>
