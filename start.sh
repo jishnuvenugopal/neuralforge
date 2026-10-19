@@ -2,7 +2,7 @@
 # NeuralForge: one command, one address.
 #
 #   bash start.sh          build the UI if it changed, then serve everything at
-#                          http://neuralforge.localhost:8000 and open the browser
+#                          http://localhost:8000 and open the browser
 #   bash start.sh --dev    hot-reloading UI on :5173 (backend still on :8000)
 #
 # API keys are set in the app (Settings). ZYT_FOUNDRY_API_KEY in the environment also works.
@@ -12,7 +12,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PORT="${NEURALFORGE_PORT:-8000}"
-URL="http://neuralforge.localhost:${PORT}"
+URL="http://localhost:${PORT}"   # plain localhost: Safari's iCloud Private Relay leaves it alone
 DEV=0
 [ "${1:-}" = "--dev" ] && DEV=1
 
@@ -66,7 +66,7 @@ OPEN_URL="$URL"
 if [ "$DEV" = 1 ]; then
   (cd "$FRONTEND" && npx vite --port 5173 --strictPort >/dev/null) &
   PIDS="$PIDS $!"
-  OPEN_URL="http://neuralforge.localhost:5173"
+  OPEN_URL="http://localhost:5173"
   sleep 1.5
 fi
 
@@ -74,7 +74,6 @@ echo ""
 echo "  NeuralForge is running"
 echo ""
 echo "    ➜  ${OPEN_URL}"
-if [ "$DEV" = 1 ]; then echo "       (or http://localhost:5173)"; else echo "       (or http://localhost:${PORT})"; fi
 echo ""
 echo "  Settings (provider, API key, setup checks) open from the ⚙ button in the app."
 echo "  Press Ctrl+C to stop."

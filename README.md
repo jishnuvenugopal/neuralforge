@@ -15,7 +15,7 @@ reference simulation → optional LibreLane hardening to GDS.
 git clone https://github.com/jishnuvenugopal/neuralforge.git
 cd neuralforge
 bash setup.sh      # once: Python packages, UI build, checks Yosys / Icarus
-bash start.sh      # serves everything at http://neuralforge.localhost:8000
+bash start.sh      # serves everything at http://localhost:8000
 ```
 
 The app opens in your browser. It always starts in dark mode; the header has a
@@ -25,8 +25,7 @@ light-mode switch for the current visit. On first launch the **Settings** drawer
   stored only on your machine in `.neuralforge/settings.json` (git-ignored, mode 600).
 - **Setup guide:** shows which tools are installed and the command for anything missing.
 
-`http://localhost:8000` works too. `bash start.sh --dev` runs the UI with hot
-reload on port 5173.
+`bash start.sh --dev` runs the UI with hot reload on port 5173.
 
 ### Model providers
 
