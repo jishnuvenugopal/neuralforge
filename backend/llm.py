@@ -118,33 +118,64 @@ class OpenAIConversation(Conversation):
                 "content": json.dumps(result),
             })
 
-    def next_turn(self):
+    def _stream(self, **params) -> tuple[str, list]:
+        """One streamed chat completion (some gateways, ZYT Foundry included, require streaming).
+
+        Returns (text, tool_calls) with tool-call fragments joined by their index.
+        """
+        text = []
+        calls = {}
+        chunks = 0
         try:
-            response = self.client.chat.completions.create(
-                model=self.config.model,
-                messages=self.messages,
-                tools=self.tool_specs,
-                tool_choice="auto",
-            )
+            stream = self.client.chat.completions.create(model=self.config.model, stream=True, **params)
+            for chunk in stream:
+                chunks += 1
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                if delta is None:
+                    continue
+                if delta.content:
+                    text.append(delta.content)
+                for fragment in delta.tool_calls or []:
+                    call = calls.setdefault(fragment.index, {"id": "", "name": "", "arguments": ""})
+                    if fragment.id:
+                        call["id"] = fragment.id
+                    if fragment.function is not None:
+                        if fragment.function.name:
+                            call["name"] += fragment.function.name
+                        if fragment.function.arguments:
+                            call["arguments"] += fragment.function.arguments
         except openai.OpenAIError as e:
             raise _friendly(self.config, e) from e
+        if chunks == 0:
+            raise LLMError(
+                f"{self.config.label} ({self.config.base_url}, model {self.config.model}) accepted the request "
+                "but streamed no data back. The gateway answered with a plain body instead of a stream; "
+                "the problem is on the provider's side."
+            )
+        ordered = [calls[i] for i in sorted(calls)]
+        for n, call in enumerate(ordered):
+            call["id"] = call["id"] or f"call_{len(self.messages)}_{n}"
+        return "".join(text), ordered
 
-        if not response.choices:
-            raise LLMError(f"{self.config.label} returned no choices.")
-        message = response.choices[0].message
+    def next_turn(self):
+        content, calls = self._stream(messages=self.messages, tools=self.tool_specs, tool_choice="auto")
 
-        assistant = {"role": "assistant", "content": message.content or ""}
-        turn = Turn(texts=[message.content] if message.content else [])
-        if message.tool_calls:
+        assistant = {"role": "assistant", "content": content}
+        turn = Turn(texts=[content] if content else [])
+        if calls:
             assistant["tool_calls"] = []
-            for call in message.tool_calls:
+            for call in calls:
                 assistant["tool_calls"].append({
-                    "id": call.id,
+                    "id": call["id"],
                     "type": "function",
-                    "function": {"name": call.function.name, "arguments": call.function.arguments},
+                    "function": {"name": call["name"], "arguments": call["arguments"]},
                 })
-                args, error = _parse_args(call.function.arguments)
-                turn.tool_calls.append(ToolCall(call.id, call.function.name, args, error))
+                args, error = _parse_args(call["arguments"])
+                turn.tool_calls.append(ToolCall(call["id"], call["name"], args, error))
+        elif not content:
+            raise LLMError(f"{self.config.label} returned an empty response.")
         self.messages.append(assistant)
         return turn
 
@@ -234,20 +265,20 @@ def check_connection(config: ProviderConfig) -> str:
     conversation = open_conversation(config, "You are a connectivity check.", [])
     conversation.add_user_text("Reply with the single word OK.")
     if isinstance(conversation, OpenAIConversation):
-        try:
-            response = conversation.client.chat.completions.create(
-                model=config.model, messages=conversation.messages
-            )
-        except openai.OpenAIError as e:
-            raise _friendly(config, e) from e
-        return (response.choices[0].message.content or "").strip() if response.choices else ""
+        text, _ = conversation._stream(messages=conversation.messages)
+        if not text.strip():
+            raise LLMError(f"{config.label} connected but sent an empty reply.")
+        return text.strip()
     try:
         message = conversation.client.messages.create(
             model=config.model, max_tokens=1024, messages=conversation.messages
         )
     except anthropic.AnthropicError as e:
         raise _friendly(config, e) from e
-    return " ".join(b.text for b in message.content if b.type == "text").strip()
+    reply = " ".join(b.text for b in message.content if b.type == "text").strip()
+    if not reply:
+        raise LLMError(f"{config.label} connected but sent an empty reply.")
+    return reply
 
 
 def list_models(config: ProviderConfig) -> list[str]:

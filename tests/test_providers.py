@@ -101,23 +101,39 @@ def config(kind="openai", base_url="https://foundry.zyt.app/v1"):
     return settings.ProviderConfig("p", "Test", kind, base_url, "m", "key")
 
 
+def chunk(content=None, calls=None):
+    return NS(choices=[NS(delta=NS(content=content, tool_calls=calls))])
+
+
+def fragment(index, id=None, name=None, arguments=None):
+    return NS(index=index, id=id, function=NS(name=name, arguments=arguments))
+
+
 class OpenAIWireTest(unittest.TestCase):
-    def test_tool_call_round_trip(self):
+    def make(self, chunks):
         conversation = llm.open_conversation(config(), "SYS", TOOL_DECLARATIONS)
-        reply = NS(choices=[NS(message=NS(
-            content="Writing RTL.",
-            tool_calls=[NS(id="call_1", function=NS(name="synthesize_verilog", arguments='{"module_name": "m", "verilog_code": "x"}'))],
-        ))])
-        conversation.client = NS(chat=NS(completions=NS(create=mock.Mock(return_value=reply))))
+        create = mock.Mock(return_value=iter(chunks))
+        conversation.client = NS(chat=NS(completions=NS(create=create)))
+        return conversation, create
+
+    def test_streamed_tool_call_round_trip(self):
+        conversation, create = self.make([
+            chunk(content="Writing "),
+            chunk(content="RTL."),
+            chunk(calls=[fragment(0, id="call_1", name="synthesize_verilog", arguments='{"module_name": ')]),
+            chunk(calls=[fragment(0, arguments='"m", "verilog_code": "x"}')]),
+            NS(choices=[]),  # usage-only chunk
+        ])
         conversation.add_user_text("hi")
         turn = conversation.next_turn()
 
-        sent = conversation.client.chat.completions.create.call_args.kwargs
+        sent = create.call_args.kwargs
+        self.assertTrue(sent["stream"])
         self.assertEqual(sent["model"], "m")
         self.assertNotIn("temperature", sent)
         self.assertEqual(sent["tools"][0]["type"], "function")
         self.assertEqual(turn.texts, ["Writing RTL."])
-        self.assertEqual((turn.tool_calls[0].name, turn.tool_calls[0].args["module_name"]), ("synthesize_verilog", "m"))
+        self.assertEqual((turn.tool_calls[0].name, turn.tool_calls[0].args), ("synthesize_verilog", {"module_name": "m", "verilog_code": "x"}))
 
         conversation.add_tool_results([(turn.tool_calls[0], {"status": "success"})])
         roles = [m["role"] for m in conversation.messages]
@@ -125,12 +141,36 @@ class OpenAIWireTest(unittest.TestCase):
         self.assertEqual(conversation.messages[2]["tool_calls"][0]["id"], "call_1")
         self.assertEqual(conversation.messages[3]["tool_call_id"], "call_1")
 
+    def test_two_parallel_calls_keep_their_order(self):
+        conversation, _ = self.make([
+            chunk(calls=[fragment(1, id="b", name="simulate_verilog", arguments='{"module_name": "m"}')]),
+            chunk(calls=[fragment(0, id="a", name="analyze_model", arguments='{"model_spec": "xor"}')]),
+        ])
+        turn = conversation.next_turn()
+        self.assertEqual([c.id for c in turn.tool_calls], ["a", "b"])
+
     def test_invalid_json_arguments_are_flagged(self):
-        conversation = llm.open_conversation(config(), "SYS", TOOL_DECLARATIONS)
-        reply = NS(choices=[NS(message=NS(content=None, tool_calls=[NS(id="c", function=NS(name="simulate_verilog", arguments="{oops"))]))])
-        conversation.client = NS(chat=NS(completions=NS(create=mock.Mock(return_value=reply))))
+        conversation, _ = self.make([chunk(calls=[fragment(0, id="c", name="simulate_verilog", arguments="{oops")])])
         turn = conversation.next_turn()
         self.assertIn("not valid JSON", turn.tool_calls[0].error)
+
+    def test_connection_check_streams(self):
+        conversation, create = self.make([chunk(content="OK")])
+        with mock.patch.object(llm, "open_conversation", return_value=conversation):
+            self.assertEqual(llm.check_connection(config()), "OK")
+        self.assertTrue(create.call_args.kwargs["stream"])
+
+    def test_a_stream_with_no_data_is_an_error(self):
+        # ZYT Foundry, 19 Oct 2026: HTTP 200 with a JSON body instead of SSE; the SDK yields no chunks.
+        conversation, _ = self.make([])
+        with self.assertRaisesRegex(llm.LLMError, "streamed no data"):
+            conversation.next_turn()
+
+    def test_connection_check_fails_on_an_empty_reply(self):
+        conversation, _ = self.make([chunk(content="")])
+        with mock.patch.object(llm, "open_conversation", return_value=conversation):
+            with self.assertRaisesRegex(llm.LLMError, "empty reply"):
+                llm.check_connection(config())
 
     def test_missing_key_is_a_clear_error(self):
         with self.assertRaisesRegex(llm.LLMError, "No API key"):
