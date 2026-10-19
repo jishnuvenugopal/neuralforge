@@ -475,12 +475,8 @@ function useTheme() {
   );
   const toggle = () => {
     const next = theme === "dark" ? "light" : "dark";
+    // For this visit only: every load starts dark.
     document.documentElement.classList.toggle("dark", next === "dark");
-    try {
-      localStorage.setItem("nf-theme", next);
-    } catch {
-      // Storage can be unavailable (private mode); the toggle still works for this visit.
-    }
     setTheme(next);
   };
   return [theme, toggle];

@@ -18,8 +18,8 @@ bash setup.sh      # once: Python packages, UI build, checks Yosys / Icarus
 bash start.sh      # serves everything at http://neuralforge.localhost:8000
 ```
 
-The app opens in your browser (dark by default; the header has a light-mode
-switch). On first launch the **Settings** drawer opens by itself:
+The app opens in your browser. It always starts in dark mode; the header has a
+light-mode switch for the current visit. On first launch the **Settings** drawer opens by itself:
 
 - **Model provider:** paste an API key and press *Save and test*. Keys are
   stored only on your machine in `.neuralforge/settings.json` (git-ignored, mode 600).

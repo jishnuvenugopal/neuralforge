@@ -7,10 +7,8 @@
     <meta name="description" content="An LLM agent writes Verilog for a trained network; Yosys and Icarus check it bit-exactly against a reference." />
     <title>NeuralForge</title>
     <script>
-      // Dark by default; the header toggle stores the choice in this browser.
-      try {
-        if (localStorage.getItem("nf-theme") === "light") document.documentElement.classList.remove("dark");
-      } catch (e) {}
+      // Always start dark. Older builds saved a theme choice; forget it.
+      try { localStorage.removeItem("nf-theme"); } catch (e) {}
     </script>
   </head>
   <body>
