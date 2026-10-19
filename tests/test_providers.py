@@ -27,9 +27,9 @@ class SettingsTest(unittest.TestCase):
         ]
         for p in self.patches:
             p.start()
-        os.environ.pop("ZYT_FOUNDRY_API_KEY", None)
-        os.environ.pop("ZYT_FOUNDRY_BASE_URL", None)
-        os.environ.pop("ZYT_FOUNDRY_MODEL", None)
+        for name in ("ZYT_FOUNDRY_API_KEY", "ZYT_FOUNDRY_BASE_URL", "ZYT_FOUNDRY_MODEL",
+                     "NVIDIA_API_KEY", "NVIDIA_NIM_BASE_URL", "NVIDIA_NIM_MODEL"):
+            os.environ.pop(name, None)
         self.path = path
 
     def tearDown(self):
@@ -37,17 +37,33 @@ class SettingsTest(unittest.TestCase):
             p.stop()
         self.tmp.cleanup()
 
-    def test_default_is_zyt_foundry_gpt_6_astra(self):
+    def test_default_is_nvidia_nim(self):
         config = settings.active_config()
-        self.assertEqual((config.provider, config.kind), ("zyt_foundry", "openai"))
-        self.assertEqual(config.base_url, "https://foundry.zyt.app/v1")
-        self.assertEqual(config.model, "gpt-6-astra")
+        self.assertEqual((config.provider, config.kind), ("nvidia_nim", "openai"))
+        self.assertEqual(config.base_url, "https://integrate.api.nvidia.com/v1")
+        self.assertEqual(config.model, "moonshotai/kimi-k2.6")
         view = settings.public_view()
         self.assertFalse(view["configured"])
-        self.assertIn("gpt-6.1-sol", view["providers"]["zyt_foundry"]["models"])
-        self.assertEqual(len(view["providers"]["zyt_foundry"]["models"]), 8)
+        self.assertEqual(view["providers"]["nvidia_nim"]["key_env"], "NVIDIA_API_KEY")
+
+    def test_zyt_foundry_defaults_to_gpt_6_astra(self):
+        settings.update({"active_provider": "zyt_foundry"})
+        config = settings.active_config()
+        self.assertEqual((config.base_url, config.model), ("https://foundry.zyt.app/v1", "gpt-6-astra"))
+        models = settings.public_view()["providers"]["zyt_foundry"]["models"]
+        self.assertEqual(len(models), 8)
+        self.assertIn("gpt-6.1-sol", models)
+
+    def test_nvidia_key_from_the_environment(self):
+        with mock.patch.dict(os.environ, {"NVIDIA_API_KEY": "nvapi-test-0000-9876", "NVIDIA_NIM_MODEL": "z-ai/glm-5.3"}):
+            config = settings.active_config()
+            view = settings.public_view()
+        self.assertEqual((config.api_key, config.model), ("nvapi-test-0000-9876", "z-ai/glm-5.3"))
+        self.assertTrue(view["configured"])
+        self.assertEqual(view["providers"]["nvidia_nim"]["key_source"], "environment")
 
     def test_environment_key_and_url(self):
+        settings.update({"active_provider": "zyt_foundry"})
         with mock.patch.dict(os.environ, {"ZYT_FOUNDRY_API_KEY": "zyt-test-0000-1234", "ZYT_FOUNDRY_BASE_URL": "https://x.test/v1"}):
             config = settings.active_config()
             view = settings.public_view()
@@ -55,14 +71,15 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(view["providers"]["zyt_foundry"]["key_source"], "environment")
 
     def test_keys_are_saved_privately_and_never_returned(self):
-        view = settings.update({"providers": {"zyt_foundry": {"api_key": "secret-key-abcd"}}})
+        view = settings.update({"providers": {"nvidia_nim": {"api_key": "secret-key-abcd"}}})
         self.assertTrue(view["configured"])
         self.assertNotIn("secret-key-abcd", json.dumps(view))
-        self.assertEqual(view["providers"]["zyt_foundry"]["key_hint"], "…abcd")
+        self.assertEqual(view["providers"]["nvidia_nim"]["key_hint"], "…abcd")
         self.assertEqual(os.stat(self.path).st_mode & 0o777, 0o600)
 
     def test_foundry_model_is_selectable_but_its_url_is_fixed(self):
-        settings.update({"providers": {"zyt_foundry": {"model": "gpt-6.1-sol", "base_url": "https://evil.test"}}})
+        settings.update({"active_provider": "zyt_foundry",
+                         "providers": {"zyt_foundry": {"model": "gpt-6.1-sol", "base_url": "https://evil.test"}}})
         config = settings.active_config()
         self.assertEqual((config.model, config.base_url), ("gpt-6.1-sol", "https://foundry.zyt.app/v1"))
         with mock.patch.dict(os.environ, {"ZYT_FOUNDRY_MODEL": "gpt-5.5"}):
@@ -84,10 +101,10 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual((config.kind, config.base_url, config.model), ("anthropic", "https://gw.test", "claude-x"))
 
     def test_empty_key_keeps_the_old_one_and_clear_removes_it(self):
-        settings.update({"providers": {"zyt_foundry": {"api_key": "first-key-1111"}}})
-        settings.update({"providers": {"zyt_foundry": {"api_key": ""}}})
+        settings.update({"providers": {"nvidia_nim": {"api_key": "first-key-1111"}}})
+        settings.update({"providers": {"nvidia_nim": {"api_key": ""}}})
         self.assertEqual(settings.active_config().api_key, "first-key-1111")
-        settings.update({"providers": {"zyt_foundry": {"clear_key": True}}})
+        settings.update({"providers": {"nvidia_nim": {"clear_key": True}}})
         self.assertEqual(settings.active_config().api_key, "")
 
     def test_bad_input_is_rejected(self):

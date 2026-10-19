@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 
-const PROVIDER_ORDER = ["zyt_foundry", "openai_compatible", "anthropic_compatible"];
+const PROVIDER_ORDER = ["nvidia_nim", "zyt_foundry", "openai_compatible", "anthropic_compatible"];
 
 const PROVIDER_BLURBS = {
-  zyt_foundry: "Default. OpenAI-compatible gateway with the gpt-5.5 to gpt-6.1 family.",
+  nvidia_nim: "Default. NVIDIA's hosted models (Kimi, GLM, DeepSeek, Nemotron) with a free daily allowance.",
+  zyt_foundry: "OpenAI-compatible gateway with the gpt-5.5 to gpt-6.1 family.",
   openai_compatible: "Any endpoint that speaks /v1/chat/completions with tools.",
   anthropic_compatible: "Any endpoint that speaks the Anthropic Messages API with tools.",
 };
@@ -138,7 +139,7 @@ function ProviderForm({ settings, onSaved }) {
 
   const keyPlaceholder = provider.has_key
     ? provider.key_source === "environment"
-      ? `Using ZYT_FOUNDRY_API_KEY from the environment (${provider.key_hint})`
+      ? `Using ${provider.key_env} from the environment (${provider.key_hint})`
       : `Saved (${provider.key_hint}). Type to replace.`
     : "Paste your API key";
 
@@ -260,7 +261,19 @@ function ProviderForm({ settings, onSaved }) {
           )}
         </div>
         <label className="block space-y-1.5">
-          <span className="text-xs font-medium text-muted-foreground">API key</span>
+          <span className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+            API key
+            {provider.key_help ? (
+              <a
+                href={provider.key_help}
+                target="_blank"
+                rel="noreferrer"
+                className="underline-offset-4 hover:text-foreground hover:underline"
+              >
+                Get a free key ↗
+              </a>
+            ) : null}
+          </span>
           <input
             className={inputClass}
             type="password"
