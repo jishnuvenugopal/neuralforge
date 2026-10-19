@@ -20,7 +20,7 @@ from eda_tools import (
     run_librelane_flow,
 )
 from golden import load_network, port_contract
-from llm import LLMError, check_connection, open_conversation
+from llm import LLMError, check_connection, list_models, open_conversation
 from prompts import SYSTEM_PROMPT, TOOL_DECLARATIONS, PRESET_PROMPTS
 from verifier import Ledger
 
@@ -243,6 +243,22 @@ async def test_settings():
     except LLMError as e:
         return {"ok": False, "provider": config.label, "model": config.model, "error": str(e)}
     return {"ok": True, "provider": config.label, "model": config.model, "reply": reply[:200]}
+
+
+@app.post("/api/models/{provider}")
+async def fetch_models(provider: str):
+    """Load the model list from a provider's /models endpoint and remember it."""
+    try:
+        config = nf_settings.provider_config(provider)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    try:
+        models = await asyncio.to_thread(list_models, config)
+    except LLMError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    if not models:
+        raise HTTPException(status_code=502, detail=f"{config.label} returned no models.")
+    return nf_settings.save_models(provider, models)
 
 
 @app.get("/api/prereqs")
@@ -597,8 +613,21 @@ async def design_endpoint(websocket: WebSocket):
 # The built UI, served from the same address (registered last so the API wins)
 # ---------------------------------------------------------------------------
 
+class UIFiles(StaticFiles):
+    """The built UI. index.html is always revalidated so a rebuild shows up on reload;
+    hashed assets under /assets can be cached for good."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if path.startswith("assets/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 if FRONTEND_DIST.is_dir():
-    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="ui")
+    app.mount("/", UIFiles(directory=FRONTEND_DIST, html=True), name="ui")
 
 
 # ---------------------------------------------------------------------------

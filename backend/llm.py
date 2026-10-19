@@ -248,3 +248,17 @@ def check_connection(config: ProviderConfig) -> str:
     except anthropic.AnthropicError as e:
         raise _friendly(config, e) from e
     return " ".join(b.text for b in message.content if b.type == "text").strip()
+
+
+def list_models(config: ProviderConfig) -> list[str]:
+    """Model ids from the provider's /models endpoint. Raises LLMError on failure."""
+    if not config.api_key:
+        raise LLMError(f"Save an API key for {config.label} first, then load its models.")
+    try:
+        if config.kind == "anthropic":
+            client = anthropic.Anthropic(api_key=config.api_key, base_url=config.base_url, timeout=30)
+            return [m.id for m in client.models.list()]
+        client = openai.OpenAI(api_key=config.api_key, base_url=config.base_url, timeout=30)
+        return [m.id for m in client.models.list()]
+    except (openai.OpenAIError, anthropic.AnthropicError) as e:
+        raise _friendly(config, e) from e

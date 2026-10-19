@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 const PROVIDER_ORDER = ["zyt_foundry", "openai_compatible", "anthropic_compatible"];
 
 const PROVIDER_BLURBS = {
-  zyt_foundry: "Default. OpenAI-compatible gateway, model fixed to gpt-6.1-sol.",
+  zyt_foundry: "Default. OpenAI-compatible gateway with the gpt-5.5 to gpt-6.1 family.",
   openai_compatible: "Any endpoint that speaks /v1/chat/completions with tools.",
   anthropic_compatible: "Any endpoint that speaks the Anthropic Messages API with tools.",
 };
@@ -74,7 +74,7 @@ function ProviderForm({ settings, onSaved }) {
     const fields = {};
     if (draft.api_key) fields.api_key = draft.api_key;
     if (!provider.fixed_url && draft.base_url !== undefined) fields.base_url = draft.base_url;
-    if (!provider.fixed_model && draft.model !== undefined) fields.model = draft.model;
+    if (draft.model !== undefined) fields.model = draft.model;
     const next = await api("/api/settings", {
       method: "PUT",
       body: JSON.stringify({ active_provider: selected, providers: { [selected]: fields } }),
@@ -123,6 +123,19 @@ function ProviderForm({ settings, onSaved }) {
       setResult({ ok: true, text: "Saved key removed." });
     });
 
+  const onLoadModels = () =>
+    run("models", async () => {
+      await save();
+      const next = await api(`/api/models/${selected}`, { method: "POST" });
+      onSaved(next);
+      setResult({ ok: true, text: `Loaded ${next.providers[selected].models.length} models from ${provider.label}.` });
+    });
+
+  const modelValue = draft.model ?? provider.model;
+  const knownModel = provider.models.includes(modelValue);
+  const [customModel, setCustomModel] = useState(false);
+  const showCustom = customModel || !provider.models.length || (modelValue && !knownModel);
+
   const keyPlaceholder = provider.has_key
     ? provider.key_source === "environment"
       ? `Using ZYT_FOUNDRY_API_KEY from the environment (${provider.key_hint})`
@@ -141,6 +154,7 @@ function ProviderForm({ settings, onSaved }) {
               type="button"
               onClick={() => {
                 setSelected(id);
+                setCustomModel(false);
                 setResult(null);
               }}
               className={cx(
@@ -193,17 +207,58 @@ function ProviderForm({ settings, onSaved }) {
             spellCheck={false}
           />
         </label>
-        <label className="block space-y-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Model</span>
-          <input
-            className={inputClass}
-            value={draft.model ?? provider.model}
-            onChange={(e) => setField("model", e.target.value)}
-            disabled={provider.fixed_model}
-            placeholder={provider.kind === "anthropic" ? "claude-opus-5-5" : "model id, e.g. gpt-6.1-sol"}
-            spellCheck={false}
-          />
-        </label>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">Model</span>
+            <button
+              type="button"
+              className="text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
+              onClick={onLoadModels}
+              disabled={!!busy || !(provider.has_key || draft.api_key)}
+              title={provider.has_key || draft.api_key ? "Ask the provider for its model list" : "Add an API key first"}
+            >
+              {busy === "models" ? "Loading…" : provider.models_fetched ? "Reload models" : "Load models"}
+            </button>
+          </div>
+          {showCustom ? (
+            <div className="flex gap-2">
+              <input
+                className={inputClass}
+                value={modelValue}
+                onChange={(e) => setField("model", e.target.value)}
+                placeholder={provider.kind === "anthropic" ? "claude-opus-5-5" : "model id"}
+                spellCheck={false}
+              />
+              {provider.models.length ? (
+                <button type="button" className={outlineButton} onClick={() => {
+                  setCustomModel(false);
+                  setField("model", provider.models[0]);
+                }}>
+                  List
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <select
+              className={inputClass}
+              value={modelValue}
+              onChange={(e) => {
+                if (e.target.value === "__custom__") {
+                  setCustomModel(true);
+                } else {
+                  setField("model", e.target.value);
+                }
+              }}
+            >
+              {provider.models.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+              <option value="__custom__">Custom…</option>
+            </select>
+          )}
+        </div>
         <label className="block space-y-1.5">
           <span className="text-xs font-medium text-muted-foreground">API key</span>
           <input

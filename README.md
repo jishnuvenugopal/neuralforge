@@ -32,15 +32,19 @@ reload on port 5173.
 
 | Provider | Wire protocol | Model | Notes |
 |---|---|---|---|
-| **ZYT Foundry** (default) | OpenAI-compatible | `gpt-6.1-sol` (fixed) | Base URL `https://foundry.zyt.app/v1` |
+| **ZYT Foundry** (default) | OpenAI-compatible | `gpt-6-astra` by default; any of gpt-5.5 … gpt-6.1-sol | Base URL `https://foundry.zyt.app/v1` |
 | OpenAI-compatible | `/v1/chat/completions` with tools | any | Your base URL, key and model |
 | Anthropic-compatible | Messages API with tool use | any (default `claude-opus-5-5`) | Your base URL, key and model |
+
+Pick the model from the dropdown in the header or in Settings. *Load models*
+asks the provider's `/models` endpoint for its current list.
 
 Environment variables seed the defaults; values saved in Settings win:
 
 ```bash
 export ZYT_FOUNDRY_API_KEY="..."            # optional; the Settings drawer is the usual way
 export ZYT_FOUNDRY_BASE_URL="https://foundry.zyt.app/v1"
+export ZYT_FOUNDRY_MODEL="gpt-6-astra"
 export LIBRELANE_AUTO_HARDEN=1              # optional: run LibreLane after a verified simulation
 ```
 

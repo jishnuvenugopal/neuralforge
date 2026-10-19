@@ -486,7 +486,7 @@ function useTheme() {
   return [theme, toggle];
 }
 
-function ControlPanel({ state, onSubmit, onReset, loading, isMock, provider, onOpenSettings }) {
+function ControlPanel({ state, onSubmit, onReset, loading, isMock, provider, onOpenSettings, onModelChange }) {
   const [theme, toggleTheme] = useTheme();
   const [value, setValue] = useState("");
   const promptRef = useRef(null);
@@ -519,16 +519,35 @@ function ControlPanel({ state, onSubmit, onReset, loading, isMock, provider, onO
               <Badge tone="outline">NeuralForge</Badge>
               <Badge tone={loading ? "success" : "muted"}>{loading ? "Pipeline running" : "Ready"}</Badge>
               {isMock ? <Badge tone="warning">Mock mode</Badge> : null}
-              <button
-                type="button"
-                onClick={onOpenSettings}
-                className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                title="Settings"
-              >
-                <span className={cx("h-1.5 w-1.5 rounded-full", provider?.configured ? "bg-emerald-500" : "bg-amber-500")} />
-                {provider ? `${provider.label} · ${provider.model || "no model"}` : "Settings"}
-                <span aria-hidden="true">⚙</span>
-              </button>
+              <span className="inline-flex items-center overflow-hidden rounded-md border border-border bg-background text-xs font-medium text-muted-foreground">
+                <button
+                  type="button"
+                  onClick={onOpenSettings}
+                  className="inline-flex items-center gap-2 px-2.5 py-1 transition-colors hover:bg-accent hover:text-foreground"
+                  title={provider?.configured ? "Settings" : "Add an API key in Settings"}
+                >
+                  <span className={cx("h-1.5 w-1.5 rounded-full", provider?.configured ? "bg-emerald-500" : "bg-amber-500")} />
+                  {provider ? provider.label : "Settings"}
+                  <span aria-hidden="true">⚙</span>
+                </button>
+                {provider ? (
+                  <select
+                    aria-label="Model"
+                    value={provider.model || ""}
+                    disabled={loading}
+                    onChange={(event) => onModelChange(event.target.value)}
+                    className="border-l border-border bg-transparent py-1 pl-2 pr-1 text-xs font-medium text-foreground outline-none hover:bg-accent disabled:opacity-60"
+                  >
+                    {(provider.models.includes(provider.model) ? provider.models : [provider.model, ...provider.models])
+                      .filter(Boolean)
+                      .map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                  </select>
+                ) : null}
+              </span>
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -1161,6 +1180,15 @@ export default function App() {
           isMock={isMock}
           provider={activeProvider}
           onOpenSettings={() => setSettingsOpen(true)}
+          onModelChange={async (model) => {
+            const id = setup.settings.active_provider;
+            const response = await fetch("/api/settings", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ providers: { [id]: { model } } }),
+            });
+            if (response.ok) setup.setSettings(await response.json());
+          }}
         />
 
         <div className="grid flex-1 gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">

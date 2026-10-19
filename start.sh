@@ -45,7 +45,7 @@ fi
 # --- Port ----------------------------------------------------------------
 stale="$(pgrep -f "uvicorn main:app .*--port ${PORT}" || true)"
 [ -n "$stale" ] && kill $stale 2>/dev/null && sleep 1
-if lsof -ti "tcp:${PORT}" >/dev/null 2>&1; then
+if lsof -ti "tcp:${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
   fail "Port ${PORT} is in use by another program. Try: NEURALFORGE_PORT=8010 bash start.sh"
 fi
 

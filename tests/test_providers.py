@@ -29,6 +29,7 @@ class SettingsTest(unittest.TestCase):
             p.start()
         os.environ.pop("ZYT_FOUNDRY_API_KEY", None)
         os.environ.pop("ZYT_FOUNDRY_BASE_URL", None)
+        os.environ.pop("ZYT_FOUNDRY_MODEL", None)
         self.path = path
 
     def tearDown(self):
@@ -36,12 +37,15 @@ class SettingsTest(unittest.TestCase):
             p.stop()
         self.tmp.cleanup()
 
-    def test_default_is_zyt_foundry_with_fixed_model(self):
+    def test_default_is_zyt_foundry_gpt_6_astra(self):
         config = settings.active_config()
         self.assertEqual((config.provider, config.kind), ("zyt_foundry", "openai"))
         self.assertEqual(config.base_url, "https://foundry.zyt.app/v1")
-        self.assertEqual(config.model, "gpt-6.1-sol")
-        self.assertFalse(settings.public_view()["configured"])
+        self.assertEqual(config.model, "gpt-6-astra")
+        view = settings.public_view()
+        self.assertFalse(view["configured"])
+        self.assertIn("gpt-6.1-sol", view["providers"]["zyt_foundry"]["models"])
+        self.assertEqual(len(view["providers"]["zyt_foundry"]["models"]), 8)
 
     def test_environment_key_and_url(self):
         with mock.patch.dict(os.environ, {"ZYT_FOUNDRY_API_KEY": "zyt-test-0000-1234", "ZYT_FOUNDRY_BASE_URL": "https://x.test/v1"}):
@@ -57,10 +61,19 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(view["providers"]["zyt_foundry"]["key_hint"], "…abcd")
         self.assertEqual(os.stat(self.path).st_mode & 0o777, 0o600)
 
-    def test_fixed_model_cannot_be_changed(self):
-        settings.update({"providers": {"zyt_foundry": {"model": "gpt-5.5", "base_url": "https://evil.test"}}})
+    def test_foundry_model_is_selectable_but_its_url_is_fixed(self):
+        settings.update({"providers": {"zyt_foundry": {"model": "gpt-6.1-sol", "base_url": "https://evil.test"}}})
         config = settings.active_config()
         self.assertEqual((config.model, config.base_url), ("gpt-6.1-sol", "https://foundry.zyt.app/v1"))
+        with mock.patch.dict(os.environ, {"ZYT_FOUNDRY_MODEL": "gpt-5.5"}):
+            settings.update({"providers": {"zyt_foundry": {"model": ""}}})
+            self.assertEqual(settings.active_config().model, "gpt-5.5")
+
+    def test_fetched_model_lists_are_remembered(self):
+        view = settings.save_models("openai_compatible", ["b-model", "a-model", "a-model"])
+        entry = view["providers"]["openai_compatible"]
+        self.assertEqual(entry["models"], ["a-model", "b-model"])
+        self.assertTrue(entry["models_fetched"])
 
     def test_switch_to_anthropic_compatible(self):
         settings.update({
