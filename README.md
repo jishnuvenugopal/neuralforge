@@ -1,56 +1,92 @@
 # NeuralForge
 
-NeuralForge is an AI chip architect demo that turns natural-language ML model requests into ASIC-oriented hardware artifacts.
+An LLM agent turns a plain-English request for a small neural network into
+Verilog with the trained INT8 weights baked in. Yosys synthesizes it to
+SkyWater 130 nm cells, and Icarus Verilog checks every output bit-exactly
+against an integer reference of the network. The model writes the design;
+it never writes or grades the test.
 
-It uses a Gemini agent loop to:
-- analyze a model request
-- emit a hardware bill of materials
-- generate Verilog RTL with hardcoded INT8 weights
-- run Yosys synthesis against SkyWater 130nm
-- check the design against a bit-exact reference of the trained network in Icarus Verilog
-- optionally launch LibreLane hardening after a successful simulation
+Pipeline: request → hardware bill of materials → RTL → synthesis gate →
+reference simulation → optional LibreLane hardening to GDS.
 
-## Stack
-
-- Backend: FastAPI + Gemini function calling
-- Frontend: React + Vite
-- EDA: Yosys, Icarus Verilog, netlistsvg, SkyWater 130nm liberty
-- Optional physical flow: Nix + LibreLane
-
-## Project Layout
-
-```text
-neuralforge/
-├── backend/
-│   ├── main.py          agent loop and WebSocket API
-│   ├── eda_tools.py     Yosys / Icarus / LibreLane wrappers
-│   ├── golden.py        bit-exact integer reference of the trained networks
-│   ├── verifier.py      source scan, generated testbench, verdict, hash ledger
-│   └── model_trainer.py trains and quantizes the demo models
-├── frontend/
-├── pdk/
-├── tests/
-├── setup.sh
-└── start.sh
-```
-
-## Quick Start
+## Quick start
 
 ```bash
 git clone https://github.com/jishnuvenugopal/neuralforge.git
 cd neuralforge
-export GEMINI_API_KEY="your-key"
-export GEMINI_MODEL="gemini-3.1-flash-lite"
-bash start.sh
+bash setup.sh      # once: Python packages, UI build, checks Yosys / Icarus
+bash start.sh      # serves everything at http://neuralforge.localhost:8000
 ```
 
-Frontend: `http://localhost:5173`  
-Backend health: `http://localhost:8000/health`
+The app opens in your browser (dark by default; the header has a light-mode
+switch). On first launch the **Settings** drawer opens by itself:
 
-To enable physical hardening after passing simulation:
+- **Model provider:** paste an API key and press *Save and test*. Keys are
+  stored only on your machine in `.neuralforge/settings.json` (git-ignored, mode 600).
+- **Setup guide:** shows which tools are installed and the command for anything missing.
+
+`http://localhost:8000` works too. `bash start.sh --dev` runs the UI with hot
+reload on port 5173.
+
+### Model providers
+
+| Provider | Wire protocol | Model | Notes |
+|---|---|---|---|
+| **ZYT Foundry** (default) | OpenAI-compatible | `gpt-6.1-sol` (fixed) | Base URL `https://foundry.zyt.app/v1` |
+| OpenAI-compatible | `/v1/chat/completions` with tools | any | Your base URL, key and model |
+| Anthropic-compatible | Messages API with tool use | any (default `claude-opus-5-5`) | Your base URL, key and model |
+
+Environment variables seed the defaults; values saved in Settings win:
 
 ```bash
-export LIBRELANE_AUTO_HARDEN=1
+export ZYT_FOUNDRY_API_KEY="..."            # optional; the Settings drawer is the usual way
+export ZYT_FOUNDRY_BASE_URL="https://foundry.zyt.app/v1"
+export LIBRELANE_AUTO_HARDEN=1              # optional: run LibreLane after a verified simulation
+```
+
+### Requirements
+
+Python 3.10+, Node.js (once, to build the UI), Yosys and Icarus Verilog
+(`brew install yosys icarus-verilog`, or `sudo apt install yosys iverilog`).
+`netlistsvg` and Nix + LibreLane are optional. The Setup guide in the app checks all of these.
+
+## Presets
+
+Each preset has a bit-exact reference, so every run is checked, not just synthesized:
+
+| Preset | Network | Test vectors |
+|---|---|---|
+| XOR MLP | 2-8-1 MLP, ReLU, INT8 weights, 32-bit accumulators | all 4 inputs |
+| Iris classifier | 4-8-3 MLP trained on Iris | all 150 samples (integer net: 148/150 correct) |
+| Attention head | d = 8, 4 tokens, Q/K/V projections, scaled scores, hard attention | 67 token sets (3 edge cases + 64 seeded) |
+
+The attention spec is NeuralForge's own exact integer definition (softmax is
+replaced by hard attention, so the result is bit-exact):
+`P = (W·x) >>> 8` for Q, K and V; `S = (Q·Kᵀ) >>> 3`; each query takes the V
+row of its highest-scoring key (lowest index on ties). See `AttentionReference`
+in `backend/golden.py`.
+
+A free-form request that matches no preset is synthesized but reported as
+**not verified**, and is never hardened.
+
+## Project layout
+
+```text
+neuralforge/
+├── backend/
+│   ├── main.py          agent loop, REST + WebSocket API, serves the UI
+│   ├── llm.py           OpenAI- and Anthropic-compatible tool-calling conversation
+│   ├── settings.py      provider settings (local file, keys never returned to the browser)
+│   ├── prereqs.py       machine checks for the Setup guide
+│   ├── eda_tools.py     Yosys / Icarus / LibreLane wrappers
+│   ├── golden.py        bit-exact integer references (XOR, Iris, attention)
+│   ├── verifier.py      source scan, generated testbench, verdict, hash ledger
+│   └── model_trainer.py trains and quantizes the demo models
+├── frontend/            React + Vite UI (built into frontend/dist)
+├── pdk/                 SkyWater 130 nm liberty
+├── tests/
+├── setup.sh
+└── start.sh
 ```
 
 ## How a design is verified
@@ -71,12 +107,12 @@ design:
 
 The gate now works like this:
 
-- **Expected outputs come from the trained network.** `golden.py` runs the
-  quantized network in exact integer arithmetic (INT8 weights, 32-bit
+- **Expected outputs come from the reference, not the model.** `golden.py` runs
+  each preset in exact integer arithmetic (for the MLPs: INT8 weights, 32-bit
   accumulators, biases rescaled to the accumulator scale). The model is given a
   fixed port contract and the exact arithmetic.
 - **NeuralForge writes the testbench.** It drives every input (XOR: all 4;
-  Iris: all 150 samples) and writes the raw outputs to a result file whose
+  Iris: all 150 samples; attention: 67 token sets) and writes the raw outputs to a result file whose
   name and contents carry a per-run random nonce. Python compares every logit
   and class with the reference. What the simulator prints is shown, never scored.
 - **The design cannot talk to the testbench.** Design code with system tasks
@@ -88,9 +124,6 @@ The gate now works like this:
 - **Each verdict is tied to the exact code.** Synthesis records the sha256 of
   the code it passed; simulation runs only that code, and LibreLane only runs
   on code whose hash passed both.
-
-The attention preset has no reference model, so it is synthesized and reported
-as unverified; it is never hardened.
 
 The same work fixed the weight hand-off: every constant now has a unique name
 (`W1_r_c`, `B1_r`, ...; before, bias names collided with weight column 0), and
@@ -107,6 +140,12 @@ The simulator tests skip themselves when the tools are missing.
 
 ## Notes
 
-- Python 3.12 recommended. Create a virtual environment before installing dependencies.
-- The visible demo path is BOM -> RTL -> synthesis -> simulation.
-- LibreLane hardening is available as an optional advanced step.
+- **Synthesis time.** Area comes from full ABC mapping. A fully parallel design
+  can take minutes to map (the 32-bit Iris network does), so after 90 s the gate
+  retries with `abc -fast` and labels the stats `abc_mode: fast`. Fast mapping
+  overstates area (77 % larger on XOR).
+- `?mock=true` replays a canned run without calling any model.
+
+## License
+
+MIT

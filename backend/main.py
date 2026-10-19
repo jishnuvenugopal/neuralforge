@@ -3,12 +3,14 @@ import json
 import re
 import base64
 import asyncio
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from google import genai
-from google.genai import types
 
+import prereqs
+import settings as nf_settings
 from eda_tools import (
     synthesize,
     simulate_reference,
@@ -17,39 +19,28 @@ from eda_tools import (
     prepare_librelane_design,
     run_librelane_flow,
 )
-from golden import load_network, network_params, port_contract, tensor_params
+from golden import load_network, port_contract
+from llm import LLMError, check_connection, open_conversation
 from prompts import SYSTEM_PROMPT, TOOL_DECLARATIONS, PRESET_PROMPTS
 from verifier import Ledger
 
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
+FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
-app = FastAPI(title="AI Chip Architect")
+app = FastAPI(title="NeuralForge")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://neuralforge.localhost:5173"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")
 LIBRELANE_AUTO_HARDEN = os.environ.get("LIBRELANE_AUTO_HARDEN", "").lower() in {
     "1",
     "true",
     "yes",
     "on",
 }
-
-# Lazy init — don't crash on import if no key yet
-client = None
-
-def get_client():
-    global client
-    if client is None:
-        if not GEMINI_API_KEY:
-            raise ValueError("Set GEMINI_API_KEY environment variable")
-        client = genai.Client(api_key=GEMINI_API_KEY)
-    return client
 
 
 # ---------------------------------------------------------------------------
@@ -212,18 +203,51 @@ def extract_json_from_text(text: str):
 
 @app.get("/health")
 async def health():
-    tools = check_tools()
+    config = nf_settings.active_config()
     return {
         "status": "ok",
-        "api_key_set": bool(GEMINI_API_KEY),
+        "provider": {
+            "label": config.label,
+            "model": config.model,
+            "configured": bool(config.api_key and config.model),
+        },
         "librelane_auto_harden": LIBRELANE_AUTO_HARDEN,
-        "tools": tools,
+        "tools": check_tools(),
     }
 
 
 @app.get("/presets")
 async def presets():
     return PRESET_PROMPTS
+
+
+@app.get("/api/settings")
+async def get_settings():
+    return nf_settings.public_view()
+
+
+@app.put("/api/settings")
+async def put_settings(changes: dict):
+    try:
+        return nf_settings.update(changes)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/settings/test")
+async def test_settings():
+    """One tiny request to the active provider, so the settings page can show it works."""
+    config = nf_settings.active_config()
+    try:
+        reply = await asyncio.to_thread(check_connection, config)
+    except LLMError as e:
+        return {"ok": False, "provider": config.label, "model": config.model, "error": str(e)}
+    return {"ok": True, "provider": config.label, "model": config.model, "reply": reply[:200]}
+
+
+@app.get("/api/prereqs")
+async def get_prereqs():
+    return await asyncio.to_thread(prereqs.check)
 
 
 # ---------------------------------------------------------------------------
@@ -277,13 +301,16 @@ async def handle_function_call(
             "message": f"Synthesizing {module_name} with Yosys + SkyWater 130nm...",
         })
 
-        synth_result = synthesize(verilog_code, module_name)
+        synth_result = await asyncio.to_thread(synthesize, verilog_code, module_name)
         digest = ""
         if synth_result["success"]:
             digest = ledger.record_synthesis(module_name, verilog_code, synth_result.get("stats", {}))
 
         # Generate netlist SVG
-        svg_result = generate_netlist_svg(verilog_code, module_name) if synth_result["success"] else {}
+        svg_result = (
+            await asyncio.to_thread(generate_netlist_svg, verilog_code, module_name)
+            if synth_result["success"] else {}
+        )
 
         synth_msg = {
             "type": "block_synth_result",
@@ -343,7 +370,7 @@ async def handle_function_call(
             "message": f"Simulating {module_name} against the {net.name} reference ({len(net.inputs)} vectors)...",
         })
 
-        sim_result = simulate_reference(verilog_code, module_name, net)
+        sim_result = await asyncio.to_thread(simulate_reference, verilog_code, module_name, net)
         passed = bool(sim_result.get("success") and sim_result.get("passed"))
         reason = sim_result.get("reason") or sim_result.get("error", "")
 
@@ -392,31 +419,32 @@ async def handle_function_call(
 # ---------------------------------------------------------------------------
 
 async def run_agent_loop(websocket: WebSocket, user_prompt: str):
-    """Run the Gemini agent loop with function calling."""
+    """Run the agent loop with tool calling on the configured provider."""
 
-    # --- Inject trained weights into prompt ---
+    # --- Inject the preset's constants and port contract into the prompt ---
     keyword, weights = detect_and_load_weights(user_prompt)
     net = load_network(keyword)
     ledger = Ledger()
     weights_info = ""
     if net is not None:
         weights_info = weight_summary(weights)
+        scale_note = f"Inputs are INT8 at scale {net.input_scale:g}. " if hasattr(net, "input_scale") else "Inputs are INT8. "
         user_prompt += (
-            "\n\nHere are the trained network's constants to hardcode (INT8 weights; biases already "
+            "\n\nHere are the constants to hardcode (INT8 weights; MLP biases are already "
             "rescaled to each layer's 32-bit accumulator):"
-            f"\n```\n{network_params(net)}\n```"
-            f"\n\nInputs are INT8 at scale {net.input_scale:g}. Weight summary: {weights_info}"
+            f"\n```\n{net.params_text()}\n```"
+            f"\n\n{scale_note}Weight summary: {weights_info}"
             f"\n\n{port_contract(net)}"
         )
-    elif weights is not None:
-        weights_info = weight_summary(weights)
-        user_prompt += (
-            f"\n\nHere are the INT8 weights to hardcode:\n```\n{tensor_params(weights)}\n```"
-            f"\n\nWeight summary: {weights_info}"
-            "\n\nThere is no reference model for this design: NeuralForge will synthesize it but cannot verify it."
-        )
 
-    messages = [{"role": "user", "parts": [{"text": user_prompt}]}]
+    config = nf_settings.active_config()
+    try:
+        conversation = open_conversation(config, SYSTEM_PROMPT, TOOL_DECLARATIONS)
+    except LLMError as e:
+        await ws_send(websocket, {"type": "error", "message": str(e), "open_settings": True})
+        return
+    conversation.add_user_text(user_prompt)
+
     iteration = 0
     max_iterations = 15
     pending_tool = None
@@ -431,95 +459,55 @@ async def run_agent_loop(websocket: WebSocket, user_prompt: str):
 
         await ws_send(websocket, {
             "type": "status",
-            "message": f"Thinking... (iteration {iteration})",
+            "message": f"Thinking... (iteration {iteration}, {config.label} · {config.model})",
         })
 
         try:
-            response = get_client().models.generate_content(
-                model=MODEL_NAME,
-                contents=messages,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_PROMPT,
-                    tools=[
-                        types.Tool(
-                            function_declarations=[
-                                types.FunctionDeclaration(**td) for td in TOOL_DECLARATIONS
-                            ]
-                        )
-                    ],
-                    temperature=0.2,
-                ),
-            )
-        except Exception as e:
-            error_str = str(e)
-            if "429" in error_str or "quota" in error_str.lower() or "rate" in error_str.lower():
-                await ws_send(websocket, {
-                    "type": "error",
-                    "message": "Rate limited by Gemini API. Please wait a moment and try again, or switch to a different model.",
-                })
-            else:
-                await ws_send(websocket, {
-                    "type": "error",
-                    "message": f"Gemini API error: {error_str}",
-                })
+            turn = await asyncio.to_thread(conversation.next_turn)
+        except LLMError as e:
+            await ws_send(websocket, {"type": "error", "message": str(e)})
             return
 
-        # Process response parts — collect all function calls first
-        function_calls = []
-
-        for part in response.candidates[0].content.parts:
-            # --- Text part ---
-            if hasattr(part, "text") and part.text:
-                await ws_send(websocket, {
-                    "type": "agent_message",
-                    "text": part.text,
-                    "iteration": iteration,
-                })
-
-                # Try to detect a BOM JSON in the text and forward it
-                json_blocks = extract_json_from_text(part.text)
-                for jb in json_blocks:
-                    # Heuristic: if the JSON has typical BOM-ish keys, send it
-                    if isinstance(jb, dict) and (
-                        "blocks" in jb
-                        or "modules" in jb
-                        or "components" in jb
-                        or "hardware_bom" in jb
-                        or "bom" in jb
-                    ):
-                        await ws_send(websocket, {
-                            "type": "hardware_bom",
-                            "bom": jb,
-                            "iteration": iteration,
-                        })
-
-            # --- Function call part ---
-            if hasattr(part, "function_call") and part.function_call:
-                function_calls.append(part.function_call)
-
-        if function_calls:
-            # Append the model turn once
-            messages.append({
-                "role": "model",
-                "parts": response.candidates[0].content.parts,
+        for text in turn.texts:
+            await ws_send(websocket, {
+                "type": "agent_message",
+                "text": text,
+                "iteration": iteration,
             })
 
-            # Execute all function calls and batch responses
-            fn_response_parts = []
+            # Try to detect a BOM JSON in the text and forward it
+            for jb in extract_json_from_text(text):
+                if isinstance(jb, dict) and (
+                    "blocks" in jb
+                    or "modules" in jb
+                    or "components" in jb
+                    or "hardware_bom" in jb
+                    or "bom" in jb
+                ):
+                    await ws_send(websocket, {
+                        "type": "hardware_bom",
+                        "bom": jb,
+                        "iteration": iteration,
+                    })
+
+        if turn.tool_calls:
+            results = []
             finish_after_tool_batch = False
-            for fc in function_calls:
-                fn_name = fc.name
-                fn_args = dict(fc.args) if fc.args else {}
+            for call in turn.tool_calls:
+                fn_name = call.name
 
                 await ws_send(websocket, {
                     "type": "status",
                     "message": f"Calling tool: {fn_name}...",
                 })
 
-                fn_result = await handle_function_call(
-                    websocket, fn_name, fn_args, iteration,
-                    weights_info=weights_info, ledger=ledger, net=net,
-                )
+                if call.error:
+                    fn_result = {"status": "error", "message": f"{call.error}. Call {fn_name} again with valid JSON."}
+                else:
+                    fn_result = await handle_function_call(
+                        websocket, fn_name, call.args, iteration,
+                        weights_info=weights_info, ledger=ledger, net=net,
+                    )
 
                 if fn_name == "analyze_model":
                     pending_tool = "synthesize_verilog"
@@ -531,29 +519,15 @@ async def run_agent_loop(websocket: WebSocket, user_prompt: str):
                     if done:
                         finish_after_tool_batch = True
                 elif fn_name == "fix_error":
-                    pending_tool = "simulate_verilog" if fn_args.get("step") == "simulation" else "synthesize_verilog"
+                    pending_tool = "simulate_verilog" if call.args.get("step") == "simulation" else "synthesize_verilog"
 
-                fn_response_parts.append({
-                    "function_response": {
-                        "name": fn_name,
-                        "response": fn_result,
-                    }
-                })
+                results.append((call, fn_result))
 
-            messages.append({
-                "role": "user",
-                "parts": fn_response_parts,
-            })
+            conversation.add_tool_results(results)
 
             if finish_after_tool_batch:
                 break
         else:
-            # Preserve the model turn before deciding whether to stop or nudge.
-            messages.append({
-                "role": "model",
-                "parts": response.candidates[0].content.parts,
-            })
-
             nudge_text = None
             if pending_tool == "synthesize_verilog" and tool_nudges["synthesize_verilog"] < 2:
                 tool_nudges["synthesize_verilog"] += 1
@@ -582,10 +556,7 @@ async def run_agent_loop(websocket: WebSocket, user_prompt: str):
                     "type": "status",
                     "message": "Model stopped early; nudging the next required tool call...",
                 })
-                messages.append({
-                    "role": "user",
-                    "parts": [{"text": nudge_text}],
-                })
+                conversation.add_user_text(nudge_text)
                 continue
 
             # Agent finished -- no more tool calls
@@ -623,10 +594,18 @@ async def design_endpoint(websocket: WebSocket):
 
 
 # ---------------------------------------------------------------------------
+# The built UI, served from the same address (registered last so the API wins)
+# ---------------------------------------------------------------------------
+
+if FRONTEND_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="ui")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("NEURALFORGE_PORT", "8000")))

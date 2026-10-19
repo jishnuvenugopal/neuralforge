@@ -1,0 +1,11 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+openai>=1.40
+anthropic>=1.0
+numpy>=1.26
+# Optional: GDS preview after LibreLane hardening
+# gdstk
+# cairosvg
+# Only to retrain the demo models (backend/model_trainer.py)
+# torch
+# scikit-learn

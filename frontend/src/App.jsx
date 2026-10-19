@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { SettingsDrawer, useSetup } from "./Settings";
 
 const MOCK_SEQUENCE = [
   { delay: 300, msg: { type: "status", message: "Analyzing model architecture..." } },
@@ -38,9 +39,11 @@ const MOCK_SEQUENCE = [
     msg: {
       type: "simulation_result",
       passed: true,
+      verdict: "passed",
       pass_count: 4,
       total_count: 4,
-      output: "VCD info: dumpfile xor_mlp_tb.vcd opened for output.\n\n=== XOR MLP Functional Test ===\nInput [0,0] -> 0  PASS\nInput [0,1] -> 1  PASS\nInput [1,0] -> 1  PASS\nInput [1,1] -> 0  PASS\n\n4/4 TESTS PASSED\nSimulation time: 800ns",
+      reason: "all 4 vectors match the bit-exact reference",
+      output: "testbench.v:58: $finish called at 101000 (1ps)",
     },
   },
   { delay: 9000, msg: { type: "complete", iterations: 3 } },
@@ -59,7 +62,8 @@ const PRESETS = [
   },
   {
     label: "Attention Head",
-    prompt: "Build a single-head scaled dot-product attention block with 8-dim embeddings, sequence length 4",
+    prompt:
+      "Build a single-head attention block with 8-dim embeddings, sequence length 4, scaled dot-product scores and hard attention",
     note: "Showpiece architecture",
   },
 ];
@@ -212,10 +216,13 @@ function reducer(state, action) {
         ...state,
         loading: false,
         error: action.message,
+        openSettings: Boolean(action.open_settings),
         messages: [...state.messages, { type: "error", text: action.message, time: new Date() }],
       };
     case "set_tab":
       return { ...state, activeTab: action.tab };
+    case "settings_opened":
+      return { ...state, openSettings: false };
     case "reset":
       return { ...initialState };
     default:
@@ -462,7 +469,25 @@ function EmptyState({ title, description, extra = null }) {
   );
 }
 
-function ControlPanel({ state, onSubmit, onReset, loading, isMock }) {
+function useTheme() {
+  const [theme, setTheme] = useState(() =>
+    document.documentElement.classList.contains("dark") ? "dark" : "light"
+  );
+  const toggle = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    document.documentElement.classList.toggle("dark", next === "dark");
+    try {
+      localStorage.setItem("nf-theme", next);
+    } catch {
+      // Storage can be unavailable (private mode); the toggle still works for this visit.
+    }
+    setTheme(next);
+  };
+  return [theme, toggle];
+}
+
+function ControlPanel({ state, onSubmit, onReset, loading, isMock, provider, onOpenSettings }) {
+  const [theme, toggleTheme] = useTheme();
   const [value, setValue] = useState("");
   const promptRef = useRef(null);
   const latestActivity = state.messages.at(-1)?.text || "Ready for a new model prompt";
@@ -494,14 +519,33 @@ function ControlPanel({ state, onSubmit, onReset, loading, isMock }) {
               <Badge tone="outline">NeuralForge</Badge>
               <Badge tone={loading ? "success" : "muted"}>{loading ? "Pipeline running" : "Ready"}</Badge>
               {isMock ? <Badge tone="warning">Mock mode</Badge> : null}
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                title="Settings"
+              >
+                <span className={cx("h-1.5 w-1.5 rounded-full", provider?.configured ? "bg-emerald-500" : "bg-amber-500")} />
+                {provider ? `${provider.label} · ${provider.model || "no model"}` : "Settings"}
+                <span aria-hidden="true">⚙</span>
+              </button>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
+                {theme === "dark" ? "Light" : "Dark"}
+              </button>
             </div>
             <div className="space-y-2">
               <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
                 Trained model to hardware.
               </h1>
               <p className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
-                Drive the Gemini loop, inspect the hardware bill of materials, and review RTL, synthesis,
-                netlist, and simulation outputs from a single dashboard.
+                An LLM agent writes Verilog for a trained network. Yosys synthesizes it, and Icarus checks every
+                output bit-exactly against a reference of the network. The model never grades its own work.
               </p>
             </div>
           </div>
@@ -872,7 +916,7 @@ function SynthesisPanel({ stats }) {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricTile label="Cells" value={stats.total_cells || 0} hint="Mapped standard cells" tone="sky" />
         <MetricTile label="Flip-flops" value={stats.flip_flops || 0} hint="Sequential elements" tone="emerald" />
-        <MetricTile label="Area" value={stats.area_um2 != null ? `${stats.area_um2.toFixed(1)} um^2` : "--"} hint="Sky130 area" tone="amber" />
+        <MetricTile label="Area" value={stats.area_um2 != null ? `${stats.area_um2.toFixed(1)} um^2` : "--"} hint={stats.abc_mode === "fast" ? "Fast ABC mapping (overstates area)" : "Sky130 area"} tone="amber" />
         <MetricTile label="Wires" value={stats.wires || 0} hint="Connectivity count" tone="violet" />
       </div>
 
@@ -1053,10 +1097,43 @@ function RightPanel({ state, dispatch }) {
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const isMock = new URLSearchParams(window.location.search).get("mock") === "true";
-  const wsHost = window.location.hostname === "localhost" ? "127.0.0.1" : window.location.hostname;
   const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
-  const wsUrl = `${wsProtocol}://${wsHost}:8000/ws/design`;
+  const wsUrl = `${wsProtocol}://${window.location.host}/ws/design`;
   const { send } = useWebSocket(wsUrl, dispatch);
+
+  const setup = useSetup();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState("provider");
+  const autoOpened = useRef(false);
+
+  // First launch: open settings by itself when no key is set or a required tool is missing.
+  useEffect(() => {
+    if (autoOpened.current || isMock || !setup.settings) return;
+    if (!setup.settings.configured) {
+      autoOpened.current = true;
+      setSettingsTab("provider");
+      setSettingsOpen(true);
+      return;
+    }
+    if (!setup.prereqs) return;
+    autoOpened.current = true;
+    if (!setup.prereqs.ready) {
+      setSettingsTab("setup");
+      setSettingsOpen(true);
+    }
+  }, [isMock, setup.settings, setup.prereqs]);
+
+  useEffect(() => {
+    if (state.openSettings) {
+      setSettingsTab("provider");
+      setSettingsOpen(true);
+      dispatch({ type: "settings_opened" });
+    }
+  }, [state.openSettings]);
+
+  const activeProvider = setup.settings
+    ? { ...setup.settings.providers[setup.settings.active_provider], configured: setup.settings.configured }
+    : null;
 
   const handleSubmit = (prompt) => {
     dispatch({ type: "reset" });
@@ -1082,6 +1159,8 @@ export default function App() {
           onReset={() => dispatch({ type: "reset" })}
           loading={state.loading}
           isMock={isMock}
+          provider={activeProvider}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
 
         <div className="grid flex-1 gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
@@ -1092,6 +1171,14 @@ export default function App() {
           <RightPanel state={state} dispatch={dispatch} />
         </div>
       </main>
+
+      <SettingsDrawer
+        open={settingsOpen}
+        tab={settingsTab}
+        onTab={setSettingsTab}
+        onClose={() => setSettingsOpen(false)}
+        setup={setup}
+      />
 
       {state.error ? (
         <div className="fixed bottom-4 right-4 max-w-sm rounded-xl border border-red-200 bg-white p-4 shadow-xl">

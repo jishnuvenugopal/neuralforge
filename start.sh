@@ -1,48 +1,89 @@
 #!/bin/bash
-# NeuralForge — Start both backend and frontend
+# NeuralForge: one command, one address.
+#
+#   bash start.sh          build the UI if it changed, then serve everything at
+#                          http://neuralforge.localhost:8000 and open the browser
+#   bash start.sh --dev    hot-reloading UI on :5173 (backend still on :8000)
+#
+# API keys are set in the app (Settings). ZYT_FOUNDRY_API_KEY in the environment also works.
+# NEURALFORGE_PORT changes the port; NEURALFORGE_NO_BROWSER=1 skips opening the browser.
+
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PORT="${NEURALFORGE_PORT:-8000}"
+URL="http://neuralforge.localhost:${PORT}"
+DEV=0
+[ "${1:-}" = "--dev" ] && DEV=1
 
-if [ -z "$GEMINI_API_KEY" ]; then
-  echo "ERROR: Set GEMINI_API_KEY first"
-  echo "  export GEMINI_API_KEY=\"your-key-here\""
-  exit 1
+say()  { printf "  %s\n" "$*"; }
+fail() { printf "\n  ✗ %s\n\n" "$*" >&2; exit 1; }
+
+# --- Python --------------------------------------------------------------
+PYTHON="${PYTHON:-}"
+if [ -z "$PYTHON" ]; then
+  for candidate in python3.12 python3.13 python3.11 python3; do
+    if command -v "$candidate" >/dev/null 2>&1; then PYTHON="$(command -v "$candidate")"; break; fi
+  done
+fi
+[ -n "$PYTHON" ] || fail "Python 3.10+ not found. Run: bash setup.sh"
+"$PYTHON" -c 'import sys; sys.exit(sys.version_info < (3, 10))' || fail "Python 3.10+ needed ($("$PYTHON" --version) found)."
+"$PYTHON" -c 'import fastapi, uvicorn, openai, anthropic, numpy' 2>/dev/null \
+  || fail "Python packages missing. Run: $PYTHON -m pip install -r backend/requirements.txt  (or: bash setup.sh)"
+
+# --- UI build ------------------------------------------------------------
+FRONTEND="$SCRIPT_DIR/frontend"
+if [ "$DEV" = 0 ]; then
+  if [ ! -f "$FRONTEND/dist/index.html" ] || [ -n "$(find "$FRONTEND/src" "$FRONTEND/index.html" -newer "$FRONTEND/dist/index.html" 2>/dev/null | head -1)" ]; then
+    command -v npm >/dev/null 2>&1 || fail "Node.js (npm) is needed to build the UI once. Install it: brew install node"
+    say "Building the UI..."
+    [ -d "$FRONTEND/node_modules" ] || (cd "$FRONTEND" && npm install --silent)
+    (cd "$FRONTEND" && npm run build --silent >/dev/null)
+  fi
 fi
 
-# Use homebrew Python 3.12 (has google-genai installed)
-PYTHON="/opt/homebrew/bin/python3.12"
-if [ ! -f "$PYTHON" ]; then
-  PYTHON="python3.12"
+# --- Port ----------------------------------------------------------------
+stale="$(pgrep -f "uvicorn main:app .*--port ${PORT}" || true)"
+[ -n "$stale" ] && kill $stale 2>/dev/null && sleep 1
+if lsof -ti "tcp:${PORT}" >/dev/null 2>&1; then
+  fail "Port ${PORT} is in use by another program. Try: NEURALFORGE_PORT=8010 bash start.sh"
 fi
 
-# Default to gemini-2.5-flash-preview-04-17
-export GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.1-flash-lite-preview}"
-
-echo "Starting NeuralForge..."
-echo "  Python:  $($PYTHON --version)"
-echo "  API Key: ${GEMINI_API_KEY:0:8}..."
-echo "  Model:   $GEMINI_MODEL"
-echo ""
-
-# Kill any existing instances
-pkill -f "uvicorn main:app" 2>/dev/null
-sleep 1
-
-# Start backend
+# --- Backend -------------------------------------------------------------
 cd "$SCRIPT_DIR/backend"
-$PYTHON -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+"$PYTHON" -m uvicorn main:app --host 127.0.0.1 --port "$PORT" --log-level warning &
 BACKEND_PID=$!
-echo "Backend started (PID $BACKEND_PID) → http://localhost:8000"
+PIDS="$BACKEND_PID"
+trap 'kill $PIDS 2>/dev/null' EXIT INT TERM
 
-# Start frontend
-cd "$SCRIPT_DIR/frontend"
-npx vite --port 5173 &
-FRONTEND_PID=$!
-echo "Frontend started (PID $FRONTEND_PID) → http://localhost:5173"
+for _ in $(seq 1 40); do
+  curl -fsS "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1 && break
+  kill -0 "$BACKEND_PID" 2>/dev/null || fail "The backend stopped while starting (see the error above)."
+  sleep 0.25
+done
+
+OPEN_URL="$URL"
+if [ "$DEV" = 1 ]; then
+  (cd "$FRONTEND" && npx vite --port 5173 --strictPort >/dev/null) &
+  PIDS="$PIDS $!"
+  OPEN_URL="http://neuralforge.localhost:5173"
+  sleep 1.5
+fi
 
 echo ""
-echo "Mock mode: http://localhost:5173?mock=true"
-echo "Press Ctrl+C to stop both."
+echo "  NeuralForge is running"
+echo ""
+echo "    ➜  ${OPEN_URL}"
+if [ "$DEV" = 1 ]; then echo "       (or http://localhost:5173)"; else echo "       (or http://localhost:${PORT})"; fi
+echo ""
+echo "  Settings (provider, API key, setup checks) open from the ⚙ button in the app."
+echo "  Press Ctrl+C to stop."
+echo ""
 
-trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null" EXIT
-wait
+if [ "${NEURALFORGE_NO_BROWSER:-0}" != 1 ]; then
+  if command -v open >/dev/null 2>&1; then open "$OPEN_URL"
+  elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$OPEN_URL" >/dev/null 2>&1 || true
+  fi
+fi
+
+wait "$BACKEND_PID"

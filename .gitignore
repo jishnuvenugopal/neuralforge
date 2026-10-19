@@ -23,3 +23,9 @@ frontend/dist/
 # Editor / temp files
 *.swp
 *.swo
+
+# Local settings (API keys) written by the settings page
+.neuralforge/
+
+# Local Claude Code launch config
+.claude/

@@ -1,6 +1,8 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -22,6 +24,85 @@
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   --radius: 0.75rem;
+}
+
+/* Dark theme (default). Tailwind v4 utilities read these variables, so the
+   tinted panels (bg-sky-50, text-emerald-700, ...) flip without per-component edits. */
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.165 0.008 265);
+  --foreground: oklch(0.96 0.003 265);
+  --card: oklch(0.2 0.009 265);
+  --card-foreground: oklch(0.96 0.003 265);
+  --popover: oklch(0.2 0.009 265);
+  --popover-foreground: oklch(0.96 0.003 265);
+  --primary: oklch(0.94 0.005 265);
+  --primary-foreground: oklch(0.2 0.009 265);
+  --secondary: oklch(0.27 0.01 265);
+  --secondary-foreground: oklch(0.94 0.005 265);
+  --muted: oklch(0.25 0.01 265);
+  --muted-foreground: oklch(0.71 0.012 265);
+  --accent: oklch(0.28 0.012 265);
+  --accent-foreground: oklch(0.96 0.003 265);
+  --border: oklch(0.31 0.012 265);
+  --input: oklch(0.34 0.012 265);
+  --ring: oklch(0.6 0.02 265);
+  --color-sky-50: oklch(0.27 0.045 237);
+  --color-sky-200: oklch(0.42 0.08 237);
+  --color-sky-600: oklch(0.74 0.14 237);
+  --color-sky-700: oklch(0.80 0.12 237);
+  --color-sky-800: oklch(0.86 0.09 237);
+  --color-sky-900: oklch(0.92 0.05 237);
+  --color-emerald-50: oklch(0.27 0.045 163);
+  --color-emerald-200: oklch(0.42 0.08 163);
+  --color-emerald-600: oklch(0.74 0.14 163);
+  --color-emerald-700: oklch(0.80 0.12 163);
+  --color-emerald-800: oklch(0.86 0.09 163);
+  --color-emerald-900: oklch(0.92 0.05 163);
+  --color-amber-50: oklch(0.27 0.045 75);
+  --color-amber-200: oklch(0.42 0.08 75);
+  --color-amber-600: oklch(0.74 0.14 75);
+  --color-amber-700: oklch(0.80 0.12 75);
+  --color-amber-800: oklch(0.86 0.09 75);
+  --color-amber-900: oklch(0.92 0.05 75);
+  --color-red-50: oklch(0.27 0.045 25);
+  --color-red-200: oklch(0.42 0.08 25);
+  --color-red-600: oklch(0.74 0.14 25);
+  --color-red-700: oklch(0.80 0.12 25);
+  --color-red-800: oklch(0.86 0.09 25);
+  --color-red-900: oklch(0.92 0.05 25);
+  --color-violet-50: oklch(0.27 0.045 293);
+  --color-violet-200: oklch(0.42 0.08 293);
+  --color-violet-600: oklch(0.74 0.14 293);
+  --color-violet-700: oklch(0.80 0.12 293);
+  --color-violet-800: oklch(0.86 0.09 293);
+  --color-violet-900: oklch(0.92 0.05 293);
+  --color-indigo-50: oklch(0.27 0.045 277);
+  --color-indigo-200: oklch(0.42 0.08 277);
+  --color-indigo-600: oklch(0.74 0.14 277);
+  --color-indigo-700: oklch(0.80 0.12 277);
+  --color-indigo-800: oklch(0.86 0.09 277);
+  --color-indigo-900: oklch(0.92 0.05 277);
+  --color-cyan-50: oklch(0.27 0.045 215);
+  --color-cyan-200: oklch(0.42 0.08 215);
+  --color-cyan-600: oklch(0.74 0.14 215);
+  --color-cyan-700: oklch(0.80 0.12 215);
+  --color-cyan-800: oklch(0.86 0.09 215);
+  --color-cyan-900: oklch(0.92 0.05 215);
+}
+
+.dark body {
+  background:
+    radial-gradient(circle at top, rgba(148, 163, 184, 0.08), transparent 32%),
+    linear-gradient(180deg, oklch(0.17 0.009 265) 0%, oklch(0.15 0.008 265) 100%);
+}
+
+.dark .bg-white {
+  background-color: var(--card);
+}
+
+.dark ::selection {
+  background: rgba(148, 163, 184, 0.3);
 }
 
 @theme inline {

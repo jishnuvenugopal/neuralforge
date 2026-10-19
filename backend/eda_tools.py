@@ -27,7 +27,8 @@ LIBRELANE_TIMEOUT_SEC = int(os.environ.get("LIBRELANE_TIMEOUT_SEC", "1800"))
 NIX_PROFILE_BIN = _Path(os.environ.get("NIX_PROFILE_BIN", "/nix/var/nix/profiles/default/bin"))
 LIBRELANE_DEFAULT_CLOCK_PERIOD_NS = int(os.environ.get("LIBRELANE_DEFAULT_CLOCK_PERIOD_NS", "10"))
 LIBRELANE_DEFAULT_DIE_AREA = json.loads(os.environ.get("LIBRELANE_DEFAULT_DIE_AREA", "[0, 0, 600, 600]"))
-SYNTH_TIMEOUT_SEC = int(os.environ.get("NEURALFORGE_SYNTH_TIMEOUT_SEC", "120"))
+SYNTH_TIMEOUT_SEC = int(os.environ.get("NEURALFORGE_SYNTH_TIMEOUT_SEC", "90"))         # full ABC mapping
+SYNTH_FAST_TIMEOUT_SEC = int(os.environ.get("NEURALFORGE_SYNTH_FAST_TIMEOUT_SEC", "300"))  # abc -fast retry
 SIM_TIMEOUT_SEC = int(os.environ.get("NEURALFORGE_SIM_TIMEOUT_SEC", "30"))
 
 
@@ -207,7 +208,7 @@ def synthesize(verilog_code: str, module_name: str) -> dict:
                         ["yosys", "-p", yosys_script],
                         capture_output=True,
                         text=True,
-                        timeout=SYNTH_TIMEOUT_SEC,
+                        timeout=SYNTH_FAST_TIMEOUT_SEC if abc_flags else SYNTH_TIMEOUT_SEC,
                     )
                     break
                 except subprocess.TimeoutExpired:
@@ -253,7 +254,7 @@ def synthesize(verilog_code: str, module_name: str) -> dict:
     except subprocess.TimeoutExpired:
         return {
             "success": False,
-            "error": f"Yosys synthesis timed out twice ({SYNTH_TIMEOUT_SEC} s each, full and fast ABC)",
+            "error": f"Yosys synthesis timed out ({SYNTH_TIMEOUT_SEC} s full ABC, then {SYNTH_FAST_TIMEOUT_SEC} s fast ABC)",
             "log_tail": "",
         }
     except Exception as e:

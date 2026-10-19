@@ -1,8 +1,8 @@
 """
-Bit-exact integer reference of the quantized networks.
+Bit-exact integer references for every preset.
 
 The expected outputs of every simulation come from here, not from the LLM.
-The arithmetic is the one the RTL must implement (see PORT CONTRACT below):
+MLP presets (XOR, Iris) implement this arithmetic (see port_contract):
 
     h = ReLU(W1 * x + B1)        32-bit signed, no requantization
     z = W2 * h + B2              32-bit signed logits
@@ -15,6 +15,8 @@ products at the same scale:
 
     B1 = round(b1_float * s_x * s_w1)
     B2 = round(b2_float * s_x * s_w1 * s_w2)
+
+The attention preset has its own exact spec; see AttentionReference.
 """
 
 import json
@@ -31,7 +33,7 @@ XOR_INPUTS = [[0, 0], [0, 1], [1, 0], [1, 1]]
 XOR_LABELS = [0, 1, 1, 0]
 
 # Presets with a reference model. Anything else can be synthesized, but not verified.
-REFERENCE_PRESETS = ("xor", "iris")
+REFERENCE_PRESETS = ("xor", "iris", "attention")
 
 
 @dataclass
@@ -53,6 +55,24 @@ class Network:
     @property
     def cls_bits(self) -> int:
         return max(1, (self.n_outputs - 1).bit_length())
+
+    def forward(self, x: list) -> tuple[list, int]:
+        return forward(self, x)
+
+    def params_text(self) -> str:
+        return network_params(self)
+
+    def contract_rules(self) -> list[str]:
+        hidden = len(self.layers[0][0])
+        cls_rule = "cls = (z[0] > 0)" if self.n_outputs == 1 else "cls = index of the largest z (lowest index wins ties)"
+        return [
+            f"  x_i = $signed(x_flat[8*i+7 : 8*i]), i = 0..{self.n_inputs - 1}",
+            f"  z_j = logits_flat[32*j+31 : 32*j], signed, j = 0..{self.n_outputs - 1}",
+            "ARITHMETIC (all 32-bit signed, no rescaling between layers):",
+            f"  h_k = max(0, sum_i W1_k_i * x_i + B1_k)      k = 0..{hidden - 1}",
+            "  z_j = sum_k W2_j_k * h_k + B2_j",
+            f"  {cls_rule}",
+        ]
 
 
 def _as_float(entry: dict) -> list:
@@ -103,9 +123,68 @@ def forward(net: Network, x: list) -> tuple[list, int]:
     return act, cls
 
 
-def reference_outputs(net: Network) -> list[tuple[list, int]]:
-    """Expected (logits, cls) for every test input of the network."""
-    return [forward(net, x) for x in net.inputs]
+class AttentionReference:
+    """Exact integer spec for the single-head attention preset (defined by NeuralForge).
+
+    x is 4 tokens of 8 INT8 values: x[t][i] = x_flat[8*(8t+i)+7 : 8*(8t+i)].
+        P[t][j] = (sum_i WP_j_i * x[t][i]) >>> 8         for P in Q, K, V   (arithmetic shift)
+        S[t][u] = (sum_j Q[t][j] * K[u][j]) >>> 3        scaled dot product
+        sel[t]  = argmax_u S[t][u]                       hard max, lowest index wins ties
+        out[t][j] = V[sel[t]][j]
+    Outputs: out[t][j] as 32-bit signed at logits index 8t+j; cls packs sel[t] at bits [2t+1:2t].
+    """
+
+    TOKENS = 4
+    DIM = 8
+    PROJ_SHIFT = 8
+    SCORE_SHIFT = 3
+
+    def __init__(self, weights: dict, inputs: list):
+        self.name = "attention"
+        self.weights = weights
+        self.W = {p: [[int(v) for v in row] for row in weights[f"W{p.lower()}"]["values"]] for p in "QKV"}
+        self.inputs = inputs
+        self.labels = []
+
+    n_inputs = TOKENS * DIM
+    n_outputs = TOKENS * DIM
+    cls_bits = 2 * TOKENS
+
+    def _project(self, p: str, x: list) -> list:
+        W = self.W[p]
+        tokens = [x[self.DIM * t:self.DIM * (t + 1)] for t in range(self.TOKENS)]
+        return [[sum(w * v for w, v in zip(W[j], tok)) >> self.PROJ_SHIFT for j in range(self.DIM)] for tok in tokens]
+
+    def forward(self, x: list) -> tuple[list, int]:
+        Q, K, V = (self._project(p, x) for p in "QKV")
+        out, cls = [], 0
+        for t in range(self.TOKENS):
+            scores = [sum(q * k for q, k in zip(Q[t], K[u])) >> self.SCORE_SHIFT for u in range(self.TOKENS)]
+            _check_int32(scores, "attention scores")
+            sel = max(range(self.TOKENS), key=lambda u: (scores[u], -u))
+            out.extend(V[sel])
+            cls |= sel << (2 * t)
+        return out, cls
+
+    def params_text(self) -> str:
+        return tensor_params(self.weights)
+
+    def contract_rules(self) -> list[str]:
+        return [
+            "  x[t][i] = $signed(x_flat[8*(8*t+i)+7 : 8*(8*t+i)]), token t = 0..3, dim i = 0..7",
+            "  out[t][j] = logits_flat[32*(8*t+j)+31 : 32*(8*t+j)], signed",
+            "  cls[2*t+1 : 2*t] = sel[t]",
+            "ARITHMETIC (exact; >>> is an arithmetic right shift of a signed 32-bit value):",
+            "  Q[t][j] = (sum_i WQ_j_i * x[t][i]) >>> 8      and the same for K with WK, V with WV",
+            "  S[t][u] = (sum_j Q[t][j] * K[u][j]) >>> 3",
+            "  sel[t]  = the u with the largest S[t][u] (lowest u wins ties)",
+            "  out[t][j] = V[sel[t]][j]",
+        ]
+
+
+def reference_outputs(net) -> list[tuple[list, int]]:
+    """Expected (outputs, cls) for every test input of a reference."""
+    return [net.forward(x) for x in net.inputs]
 
 
 def load_network(keyword: str | None) -> Network | None:
@@ -120,6 +199,12 @@ def load_network(keyword: str | None) -> Network | None:
         with open(os.path.join(CACHE_DIR, "iris_inputs.json")) as f:
             data = json.load(f)
         return quantized_network("iris", weights, data["input_scale"], data["inputs"], data["labels"])
+    if keyword == "attention":
+        with open(os.path.join(CACHE_DIR, "attention_weights.json")) as f:
+            weights = json.load(f)
+        with open(os.path.join(CACHE_DIR, "attention_inputs.json")) as f:
+            data = json.load(f)
+        return AttentionReference(weights, data["inputs"])
     return None
 
 
@@ -156,25 +241,20 @@ def tensor_params(weights: dict) -> str:
     return "\n".join(lines)
 
 
-def port_contract(net: Network) -> str:
+def port_contract(net) -> str:
     """The exact interface and arithmetic the generated testbench drives and checks."""
-    n_in, n_out = net.n_inputs, net.n_outputs
-    x_bits, z_bits, c_bits = n_in * INPUT_BITS, n_out * LOGIT_BITS, net.cls_bits
-    hidden = len(net.layers[0][0])
-    cls_rule = "cls = (z[0] > 0)" if n_out == 1 else "cls = index of the largest z (lowest index wins ties)"
+    x_bits, z_bits, c_bits = net.n_inputs * INPUT_BITS, net.n_outputs * LOGIT_BITS, net.cls_bits
     lines = [
         "PORT CONTRACT (NeuralForge generates the testbench from a bit-exact reference; your design must match it exactly):",
         "  input  wire clk",
         "  input  wire rst                          // active high",
         "  input  wire start",
-        f"  input  wire [{x_bits - 1}:0] x_flat              // x_i = $signed(x_flat[8*i+7 : 8*i]), i = 0..{n_in - 1}",
+        f"  input  wire [{x_bits - 1}:0] x_flat",
         "  output wire done",
-        f"  output wire [{z_bits - 1}:0] logits_flat        // z_j = logits_flat[32*j+31 : 32*j], signed, j = 0..{n_out - 1}",
+        f"  output wire [{z_bits - 1}:0] logits_flat",
         f"  output wire [{c_bits - 1}:0] cls",
-        "ARITHMETIC (all 32-bit signed, no rescaling between layers):",
-        f"  h_k = max(0, sum_i W1_k_i * x_i + B1_k)      k = 0..{hidden - 1}",
-        f"  z_j = sum_k W2_j_k * h_k + B2_j",
-        f"  {cls_rule}",
+        "WHERE:",
+        *net.contract_rules(),
         "HANDSHAKE: the testbench holds x_flat steady, raises start, and waits up to 64 clock cycles for done = 1,",
         "then reads logits_flat and cls. done must fall within 16 cycles after start falls.",
         "A purely combinational design satisfies this with: assign done = start;",

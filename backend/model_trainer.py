@@ -156,6 +156,21 @@ def export_iris_inputs() -> dict:
     return inputs_dict
 
 
+def export_attention_inputs(count: int = 64) -> dict:
+    """Seeded INT8 test inputs (4 tokens x 8 dims) for the attention reference, plus edge cases."""
+    rng = np.random.RandomState(7)
+    inputs = [[0] * 32, [127] * 32, [-127] * 32]
+    inputs += rng.randint(-127, 128, size=(count, 32)).tolist()
+
+    inputs_dict = {"inputs": inputs}
+    out_path = os.path.join(CACHE_DIR, "attention_inputs.json")
+    with open(out_path, "w") as f:
+        json.dump(inputs_dict, f)
+    print(f"[Attention] {len(inputs)} test inputs saved to {out_path}")
+
+    return inputs_dict
+
+
 def define_attention_weights() -> dict:
     """Create random INT8 weight matrices for a demo attention layer."""
     np.random.seed(42)
@@ -200,6 +215,7 @@ if __name__ == "__main__":
     print("Generating attention weights...")
     print("=" * 50)
     attn_weights = define_attention_weights()
+    export_attention_inputs()
 
     # Summary
     print()

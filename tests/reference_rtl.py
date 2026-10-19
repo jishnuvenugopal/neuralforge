@@ -72,3 +72,56 @@ def reference_rtl(net: Network, module_name: str, registered: bool = False) -> s
         ]
     lines.append("endmodule")
     return "\n".join(lines) + "\n"
+
+
+def attention_rtl(ref, module_name: str) -> str:
+    """Combinational RTL for golden.AttentionReference."""
+    T, D = ref.TOKENS, ref.DIM
+    lines = [
+        "`timescale 1ns/1ps",
+        f"module {module_name} (",
+        "  input  wire clk,",
+        "  input  wire rst,",
+        "  input  wire start,",
+        f"  input  wire [{T * D * 8 - 1}:0] x_flat,",
+        "  output wire done,",
+        f"  output wire [{T * D * 32 - 1}:0] logits_flat,",
+        f"  output wire [{2 * T - 1}:0] cls",
+        ");",
+    ]
+    lines += ["  " + line for line in ref.params_text().splitlines()]
+    for t in range(T):
+        for i in range(D):
+            n = D * t + i
+            lines.append(f"  wire signed [7:0] x{t}_{i} = x_flat[{8 * n + 7}:{8 * n}];")
+    for p in "QKV":
+        for t in range(T):
+            for j in range(D):
+                terms = " + ".join(f"W{p}_{j}_{i} * x{t}_{i}" for i in range(D))
+                lines.append(f"  wire signed [31:0] {p.lower()}a{t}_{j} = {terms};")
+                lines.append(f"  wire signed [31:0] {p.lower()}{t}_{j} = {p.lower()}a{t}_{j} >>> {ref.PROJ_SHIFT};")
+    outs, sels = [], []
+    for t in range(T):
+        for u in range(T):
+            terms = " + ".join(f"q{t}_{j} * k{u}_{j}" for j in range(D))
+            lines.append(f"  wire signed [31:0] sa{t}_{u} = {terms};")
+            lines.append(f"  wire signed [31:0] s{t}_{u} = sa{t}_{u} >>> {ref.SCORE_SHIFT};")
+        lines.append(f"  wire signed [31:0] best{t}_0 = s{t}_0;")
+        lines.append(f"  wire [1:0] sel{t}_0 = 2'd0;")
+        for u in range(1, T):
+            lines.append(f"  wire take{t}_{u} = s{t}_{u} > best{t}_{u - 1};")
+            lines.append(f"  wire signed [31:0] best{t}_{u} = take{t}_{u} ? s{t}_{u} : best{t}_{u - 1};")
+            lines.append(f"  wire [1:0] sel{t}_{u} = take{t}_{u} ? 2'd{u} : sel{t}_{u - 1};")
+        sel = f"sel{t}_{T - 1}"
+        sels.append(sel)
+        for j in range(D):
+            mux = " : ".join(f"({sel} == 2'd{u}) ? v{u}_{j}" for u in range(T - 1)) + f" : v{T - 1}_{j}"
+            lines.append(f"  wire signed [31:0] o{t}_{j} = {mux};")
+            outs.append(f"o{t}_{j}")
+    lines += [
+        "  assign done = start;",
+        "  assign logits_flat = {" + ", ".join(reversed(outs)) + "};",
+        "  assign cls = {" + ", ".join(reversed(sels)) + "};",
+        "endmodule",
+    ]
+    return "\n".join(lines) + "\n"

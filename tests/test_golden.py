@@ -66,6 +66,32 @@ class IrisReferenceTest(unittest.TestCase):
             golden.forward(net, [1])
 
 
+class AttentionReferenceTest(unittest.TestCase):
+    def setUp(self):
+        self.ref = golden.load_network("attention")
+
+    def test_shape_and_vectors(self):
+        self.assertEqual((self.ref.n_inputs, self.ref.n_outputs, self.ref.cls_bits), (32, 32, 8))
+        self.assertEqual(len(self.ref.inputs), 67)
+        self.assertEqual(self.ref.forward([0] * 32), ([0] * 32, 0))
+
+    def test_every_key_position_gets_selected(self):
+        seen = set()
+        for _, cls in golden.reference_outputs(self.ref):
+            seen.update((cls >> (2 * t)) & 3 for t in range(4))
+        self.assertEqual(seen, {0, 1, 2, 3})
+
+    def test_hand_computed_token(self):
+        x = self.ref.inputs[5]
+        out, cls = self.ref.forward(x)
+        tok = [x[8 * t:8 * t + 8] for t in range(4)]
+        proj = {p: [[sum(w * v for w, v in zip(self.ref.W[p][j], tok[t])) // 256 for j in range(8)] for t in range(4)] for p in "QKV"}
+        scores = [sum(a * b for a, b in zip(proj["Q"][2], proj["K"][u])) // 8 for u in range(4)]
+        sel = scores.index(max(scores))
+        self.assertEqual((cls >> 4) & 3, sel)
+        self.assertEqual(out[16:24], proj["V"][sel])
+
+
 class WeightHandOffTest(unittest.TestCase):
     def test_network_params_have_unique_names(self):
         for keyword, expected in (("xor", 16 + 8 + 8 + 1), ("iris", 32 + 8 + 24 + 3)):
@@ -85,9 +111,9 @@ class WeightHandOffTest(unittest.TestCase):
         self.assertEqual(len(names), 3 * 64)
         self.assertEqual(len(set(names)), len(names))
 
-    def test_attention_has_no_reference(self):
-        self.assertIsNone(golden.load_network("attention"))
+    def test_free_form_prompts_have_no_reference(self):
         self.assertIsNone(golden.load_network(None))
+        self.assertIsNone(golden.load_network("transformer"))
 
     def test_main_does_not_import_torch(self):
         with open(os.path.join(ROOT, "backend", "main.py")) as f:

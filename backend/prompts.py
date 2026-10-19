@@ -69,10 +69,10 @@ VERILOG RULES (CRITICAL - Yosys compatibility):
 - Synthesis is rejected if the result has no logic cells, infers latches, or has an output tied to a constant or left undriven
 
 VERIFICATION:
-- NeuralForge generates the testbench and the expected outputs from the trained network (XOR: all 4 inputs; Iris: all 150 samples). It compares every logit and the class bit-exactly.
+- NeuralForge generates the testbench and the expected outputs from a bit-exact reference (XOR: all 4 inputs; Iris: all 150 samples; attention: 67 token sets). It compares every output and the class bit-exactly.
 - The verdict comes from the reference comparison only. Anything your design prints is ignored (and printing is not allowed).
 - If simulation fails, read the mismatches (input, got, expected), fix the arithmetic, resubmit to synthesize_verilog, then call simulate_verilog again.
-- Designs without a reference model (attention) are synthesized but reported as unverified.
+- Designs without a reference model (free-form requests that match no preset) are synthesized but reported as unverified.
 
 WHEN OPTIMIZING:
 - Share MAC units across layers (time-multiplex)
@@ -167,5 +167,5 @@ TOOL_DECLARATIONS = [
 PRESET_PROMPTS = {
     "xor_mlp": "XOR gate neural network: 2 binary inputs, 8 hidden neurons with ReLU activation, 1 output with step function. INT8 quantized. Train on XOR truth table and hardcode the learned weights.",
     "iris_classifier": "Iris flower classifier: 4 real-valued inputs (sepal/petal length and width), 8 hidden neurons with ReLU, 3 output classes with argmax. INT8 quantized.",
-    "attention_head": "Single transformer attention head: d_model=8, 1 head, sequence length 4. Q/K/V projection matrices (8x8 each), dot-product attention with scaling. INT8 quantized. No softmax - use max normalization approximation."
+    "attention_head": "Single transformer attention head: d_model=8, 1 head, sequence length 4. Q/K/V projection matrices (8x8 each), scaled dot-product scores, and hard attention (each query takes the value of its highest-scoring key) instead of softmax. INT8 quantized."
 }
