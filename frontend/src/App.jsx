@@ -553,6 +553,20 @@ function ControlPanel({ state, onSubmit, onReset, loading, isMock, provider, onO
                 <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
                 {theme === "dark" ? "Light" : "Dark"}
               </button>
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className={cx(
+                  "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent hover:text-foreground",
+                  provider?.configured
+                    ? "border-border bg-background text-muted-foreground"
+                    : "border-amber-500/60 bg-amber-500/10 text-amber-300"
+                )}
+                title="Provider, API key and setup checks"
+              >
+                <span aria-hidden="true">⚙</span>
+                {provider?.configured ? "Settings" : "Settings · add API key"}
+              </button>
             </div>
             <div className="space-y-2">
               <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
