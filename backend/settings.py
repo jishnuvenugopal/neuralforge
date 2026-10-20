@@ -25,16 +25,19 @@ SETTINGS_DIR = Path(os.environ.get("NEURALFORGE_HOME", str(PROJECT_ROOT / ".neur
 SETTINGS_PATH = SETTINGS_DIR / "settings.json"
 
 # Hosted NIM chat models suited to tool calling (the full list is under "Load models").
+# Ordered by the 2026-10-19 tool-calling probe (koder/issues/001); the last two are
+# listed by /models but failed it (zero output / rejected ID).
 NVIDIA_NIM_MODELS = [
-    "moonshotai/kimi-k2.6",
-    "z-ai/glm-5.3",
-    "deepseek-ai/deepseek-v4.1-flash",
     "nvidia/nemotron-3.5-super-vl-120b-a12b",
     "nvidia/nemotron-3-ultra-550b-a55b",
+    "nvidia/nemotron-3.5-lightning-30b-a3b",
     "nvidia/nemotron-3-super-120b-a12b",
-    "z-ai/glm-5.3-flash",
     "openai/gpt-oss-20b",
+    "z-ai/glm-5.3",
+    "z-ai/glm-5.3-flash",
     "mistralai/mistral-large-2-instruct",
+    "deepseek-ai/deepseek-v4.1-flash",
+    "moonshotai/kimi-k2.6",
 ]
 
 ZYT_FOUNDRY_MODELS = [
