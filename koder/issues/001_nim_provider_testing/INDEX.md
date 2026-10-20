@@ -1,7 +1,7 @@
 # 001 — NVIDIA NIM provider testing (model probe + live presets)
 
-Opened: 2026-10-19 · Status: **results complete** — default recommendation delivered;
-commit decision pending with user.
+Opened: 2026-10-19 · Status: **done** — recommendation enacted: super-vl is the spec
+default (01dfb55) and leads NVIDIA_NIM_MODELS (2b9e02f); results committed 2026-10-20.
 
 ## Goal
 
@@ -37,8 +37,9 @@ confirm bit-exact simulation. Nothing committed; results recorded here.
 
 Notes:
 - `moonshotai/kimi-k2.6` IS in the live `/models` listing (81 models) — listed but not
-  servable. It is still the hardcoded spec default (`backend/settings.py`,
-  PROVIDERS["nvidia_nim"]["model"]) → fresh installs would default to a broken ID.
+  servable. It was the hardcoded spec default (`backend/settings.py`,
+  PROVIDERS["nvidia_nim"]["model"]) until 2026-10-20, when fresh installs were moved
+  onto super-vl (01dfb55).
 - Recommendation: `nvidia/nemotron-3.5-super-vl-120b-a12b` (120B-A12B at 2–12 s round
   trips). Fallbacks: `openai/gpt-oss-20b` (fastest, 20B), `nemotron-3-ultra-550b`
   (strongest, 12–25 s).
