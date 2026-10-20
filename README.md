@@ -31,7 +31,7 @@ light-mode switch for the current visit. On first launch the **Settings** drawer
 
 | Provider | Wire protocol | Model | Notes |
 |---|---|---|---|
-| **NVIDIA NIM** (default) | OpenAI-compatible | `moonshotai/kimi-k2.6` by default; GLM, DeepSeek, Nemotron and more | Base URL `https://integrate.api.nvidia.com/v1`; free key at [build.nvidia.com](https://build.nvidia.com) |
+| **NVIDIA NIM** (default) | OpenAI-compatible | `nvidia/nemotron-3.5-super-vl-120b-a12b` by default; Nemotron, GLM, GPT-OSS and more | Base URL `https://integrate.api.nvidia.com/v1`; free key at [build.nvidia.com](https://build.nvidia.com) |
 | ZYT Foundry | OpenAI-compatible (streaming only) | `gpt-6-astra` by default; any of gpt-5.5 … gpt-6.1-sol | Base URL `https://foundry.zyt.app/v1` |
 | OpenAI-compatible | `/v1/chat/completions` with tools | any | Your base URL, key and model |
 | Anthropic-compatible | Messages API with tool use | any (default `claude-opus-5-5`) | Your base URL, key and model |
@@ -43,7 +43,7 @@ Environment variables seed the defaults; values saved in Settings win:
 
 ```bash
 export NVIDIA_API_KEY="nvapi-..."          # optional; the Settings drawer is the usual way
-export NVIDIA_NIM_MODEL="moonshotai/kimi-k2.6"
+export NVIDIA_NIM_MODEL="nvidia/nemotron-3.5-super-vl-120b-a12b"
 export ZYT_FOUNDRY_API_KEY="..."
 export ZYT_FOUNDRY_MODEL="gpt-6-astra"
 export LIBRELANE_AUTO_HARDEN=1              # optional: run LibreLane after a verified simulation

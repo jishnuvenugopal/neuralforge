@@ -54,7 +54,7 @@ PROVIDERS = {
         "label": "NVIDIA NIM",
         "kind": "openai",
         "base_url": "https://integrate.api.nvidia.com/v1",
-        "model": "moonshotai/kimi-k2.6",
+        "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
         "models": NVIDIA_NIM_MODELS,
         "fixed_url": True,
         "env": {"key": "NVIDIA_API_KEY", "url": "NVIDIA_NIM_BASE_URL", "model": "NVIDIA_NIM_MODEL"},
