@@ -49,6 +49,24 @@ export ZYT_FOUNDRY_MODEL="gpt-6-astra"
 export LIBRELANE_AUTO_HARDEN=1              # optional: run LibreLane after a verified simulation
 ```
 
+Other variables the code reads:
+
+| Variable | Default | Sets |
+|---|---|---|
+| `NVIDIA_NIM_BASE_URL`, `ZYT_FOUNDRY_BASE_URL` | the URLs in the provider table | base URL for those two providers |
+| `NEURALFORGE_PORT` | `8000` | server port |
+| `NEURALFORGE_NO_BROWSER` | unset | `1` stops `start.sh` opening a browser |
+| `NEURALFORGE_HOME` | `.neuralforge/` | folder for saved settings and keys |
+| `NEURALFORGE_SYNTH_TIMEOUT_SEC` | `90` | full ABC mapping, before the `abc -fast` retry |
+| `NEURALFORGE_SYNTH_FAST_TIMEOUT_SEC` | `300` | the `abc -fast` retry |
+| `NEURALFORGE_SIM_TIMEOUT_SEC` | `30` | Icarus simulation |
+| `LIBRELANE_ROOT` | `../librelane` | LibreLane checkout (uses its `shell.nix`) |
+| `LIBRELANE_PDK_ROOT` | `~/.ciel` | PDK folder for LibreLane |
+| `LIBRELANE_TIMEOUT_SEC` | `1800` | hardening time limit |
+| `LIBRELANE_DEFAULT_CLOCK_PERIOD_NS` | `10` | clock period for hardening |
+| `LIBRELANE_DEFAULT_DIE_AREA` | `[0, 0, 600, 600]` | die area for hardening (JSON list) |
+| `NIX_PROFILE_BIN` | `/nix/var/nix/profiles/default/bin` | where to look for Nix tools |
+
 ### Requirements
 
 Python 3.10+, Node.js (once, to build the UI), Yosys and Icarus Verilog
@@ -74,6 +92,49 @@ in `backend/golden.py`.
 A free-form request that matches no preset is synthesized but reported as
 **not verified**, and is never hardened.
 
+## Results
+
+Live runs on 19–20 October 2026 with `nvidia/nemotron-3.5-super-vl-120b-a12b`
+on NVIDIA NIM, driven through the same WebSocket the dashboard uses. A run
+passes when every output the design produces equals the integer reference.
+That is the gate's score, not classification accuracy.
+
+| Preset | Outputs matching the reference | Cells | Agent iterations | Wall time |
+|---|---|---|---|---|
+| XOR MLP | 4/4 | 3,978 | 4 | 169 s |
+| Iris classifier | 150/150 | 21,120 | 3 | 647 s |
+| Attention head | 67/67 | 491,948 | 3 | 1,316 s |
+
+What these numbers do and do not show:
+
+- **One passing run per preset, on one model.** The pass rate over repeated
+  runs has not been measured. An earlier attention attempt failed its first
+  synthesis and was cut off after 1,740 s while fixing it; earlier Iris
+  attempts were cut off by the test driver's 540 s limit.
+- **Another model failed.** `openai/gpt-oss-20b` failed the attention preset:
+  two submissions with Verilog syntax errors, a garbled tool name, and no
+  synthesis passed before the 2,700 s limit. It was the fastest model on a
+  simple tool-calling probe, so probe speed did not predict preset results.
+- **Cell counts are approximate.** The runs did not record whether full or
+  `abc -fast` mapping produced them, and fast mapping overstates area.
+- **The runs cannot be re-checked yet.** Their generated RTL and raw outputs
+  were not kept. The record, including a tool-calling probe of eight NIM
+  models, is in
+  [`koder/issues/001_nim_provider_testing/INDEX.md`](koder/issues/001_nim_provider_testing/INDEX.md).
+- **Wall time is mostly provider latency.** Model turns took 200–650 s each
+  on those days.
+
+## Limitations
+
+- Only the three presets are verified. Free-form requests are synthesized
+  and reported as not verified.
+- The networks are small and fixed: 2-8-1 and 4-8-3 MLPs, and one attention
+  head with d = 8 and 4 tokens.
+- Attention uses hard attention instead of softmax, so the reference can be
+  exact integer arithmetic.
+- LibreLane hardening is optional and needs Nix; the results above cover
+  synthesis and simulation only.
+
 ## Project layout
 
 ```text
@@ -88,7 +149,8 @@ neuralforge/
 │   ├── verifier.py      source scan, generated testbench, verdict, hash ledger
 │   └── model_trainer.py trains and quantizes the demo models
 ├── frontend/            React + Vite UI (built into frontend/dist)
-├── pdk/                 SkyWater 130 nm liberty
+├── pdk/                 SkyWater 130 nm liberty (Apache-2.0, see pdk/NOTICE)
+├── koder/               development notes: session hand-off and issue records
 ├── tests/
 ├── setup.sh
 └── start.sh
@@ -135,10 +197,12 @@ The same work fixed the weight hand-off: every constant now has a unique name
 biases are given at the scale they are added at. Each run uses its own temporary
 folder, and the flip-flop count includes flops with reset.
 
-The exploits are regression tests. With Yosys and Icarus installed:
+The exploits are regression tests. Run them with Yosys and Icarus installed,
+using the interpreter `setup.sh` reported as `Python: …` (it takes the first
+of `python3.12`, `python3.13`, `python3.11` and `python3` it finds):
 
 ```bash
-python3 -m unittest discover -s tests -v
+python3.12 -m unittest discover -s tests -v
 ```
 
 The simulator tests skip themselves when the tools are missing.
@@ -153,4 +217,5 @@ The simulator tests skip themselves when the tools are missing.
 
 ## License
 
-MIT
+MIT, except `pdk/`. `pdk/sky130.lib` comes from the SkyWater SKY130 PDK and
+is under the Apache License 2.0; see `pdk/NOTICE` and `pdk/LICENSE`.

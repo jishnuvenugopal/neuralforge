@@ -1,0 +1,22 @@
+pdk/sky130.lib
+==============
+
+This is the liberty timing file for the sky130_fd_sc_hd__tt_025C_1v80
+corner of the SkyWater SKY130 high-density standard-cell library
+(sky130_fd_sc_hd), part of the SkyWater SKY130 open-source PDK:
+
+  https://github.com/google/skywater-pdk
+  https://github.com/google/skywater-pdk-libs-sky130_fd_sc_hd
+
+Copyright 2020 The SkyWater PDK Authors
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may
+not use this file except in compliance with the License. A copy of the
+License is in pdk/LICENSE, and is also available at
+https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+
+The rest of NeuralForge is under the MIT License in the top-level LICENSE.
