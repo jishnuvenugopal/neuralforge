@@ -1,6 +1,6 @@
 # 002 — Dashboard screenshot from a real verified run
 
-Status: **planned** 2026-11-15 · run in its own session with the prompt at the bottom.
+Status: **done** 2026-11-16 on branch `docs/screenshot`. Results below.
 
 ## Why
 
@@ -73,7 +73,36 @@ Capture tool:
 
 ## Results
 
-(fill in: run date, model, cells, time, sha256, image paths)
+Capture tool: (a) `playwright-core` 1.65.1 (npm, scratchpad only) driving the
+installed Brave headless, 1440×900 viewport at 2× scale, dark mode. The script
+recorded every WebSocket frame and refused to save any shot while the Settings
+drawer was open or a protected value (settings path, home folder, key hints)
+was inside the frame; tested both ways before the real run.
+
+Published run (run 3), 2026-11-16 02:36:58 UTC, XOR MLP preset,
+`nvidia/nemotron-3.5-super-vl-120b-a12b` on NVIDIA NIM:
+- 4/4 bit-exact, module `mlp_xor_2_8_1`, 4 agent iterations, 306.3 s from clicking Run to the `complete` message.
+- 4,111 cells, 0 flip-flops (combinational design), 30,063.8 µm², 11,392 wires,
+  full ABC mapping.
+- sha256 `5b07cf23951f4a31a6a45ed6392af0fcac0bacff0b80f6593641dd214f20aa9c`.
+- Saved: `docs/runs/2026-11-16_xor_super-vl/` (`design.v`, `run.json`).
+  `docs/runs/recheck.py` reproduces sha256, cells, area and 4/4; changing one
+  weight (-126 → -125) gives a different sha256, 3/4 and exit 1.
+- Images: `docs/images/dashboard_xor_2026-11-16.png` (1440×1320, 367 KB) and
+  `docs/images/synthesis_xor_2026-11-16.png` (996×420, 83 KB). Both checked
+  zoomed in: no key hint, drawer, home path or temp path.
+
+Other runs this session (not published): run 1 was stopped by the capture
+script's own guard on its first frame (too strict: it flagged the closed drawer's
+off-screen text); run 2 passed 4/4 (3,998 cells, 109 s) but the 1440×900 viewport
+cut off the verdict panel, and the browser had closed, so a third real run was
+made with full-page capture. Mock replay never used.
+
+Framing: the page is 6,086 px tall because the workspace stretches to the agent
+log, so the main image is the top 1,320 px of the full page. It is cut just above
+the Simulation tab's Transcript box, which prints the simulator's macOS temp
+folder path. The optional GIF was skipped: its frames would need the same
+per-frame check for that path.
 
 ## Prompt
 

@@ -1,0 +1,25 @@
+{
+  "date_utc": "2026-11-16T02:36:58Z",
+  "preset": "xor",
+  "prompt": "Build a 2-input XOR gate using a 2-8-1 MLP with hardcoded INT8 weights",
+  "provider_status": "Thinking... (iteration 1, NVIDIA NIM \u00b7 nvidia/nemotron-3.5-super-vl-120b-a12b)",
+  "module": "mlp_xor_2_8_1",
+  "sha256": "5b07cf23951f4a31a6a45ed6392af0fcac0bacff0b80f6593641dd214f20aa9c",
+  "elapsed_s": 306.3,
+  "iterations": 4,
+  "rtl_versions_sent": 1,
+  "simulations_run": 1,
+  "synthesis": {
+    "total_cells": 4111,
+    "flip_flops": 0,
+    "area_um2": 30063.8336,
+    "wires": 11392,
+    "abc_mode": "full"
+  },
+  "verdict": {
+    "passed": true,
+    "pass_count": 4,
+    "total_count": 4,
+    "reason": "all 4 vectors match the bit-exact reference"
+  }
+}
