@@ -1,5 +1,5 @@
 ---
-updated_at: 16 Nov 2026 | 07:49 AM IST
+updated_at: 16 Nov 2026 | 08:21 AM IST
 ---
 # NeuralForge — operator state
 
@@ -10,7 +10,7 @@ the design; it never writes or grades the test. FastAPI backend + React dashboar
 both served at http://localhost:8000.
 
 **Repo goal now:** make that claim checkable by anyone, not just this machine:
-CI on a neutral runner (done), real runs others can re-verify, then measured pass rates.
+CI on a neutral runner (done), real runs others can re-verify (one so far), then measured pass rates.
 
 Run: `NEURALFORGE_NO_BROWSER=1 bash start.sh` · Tests: `python3.12 -m unittest discover -s tests -v`
 (71 tests, ~82 s, none skipped with Yosys 0.63 + Icarus 13.0). Use python3.12 for
@@ -18,6 +18,12 @@ anything importing backend/; plain python3 here lacks the packages.
 
 ## Past
 
+- 2026-11-16: README shows a real XOR run (PR #2, merge `746c733`): super-vl, 4/4
+  bit-exact, 4,111 cells, 30,063.8 um^2 full ABC, 4 iterations, 306 s. RTL + sha256
+  + verdict in `docs/runs/2026-11-16_xor_super-vl/`; `docs/runs/recheck.py` re-runs
+  the gate on it (one-weight tamper → 3/4, exit 1). Captured with playwright-core
+  driving Brave; 3 real NIM runs used (details in `plans/002`). Image cropped above
+  the Transcript box, which shows the simulator's macOS temp path.
 - 2026-11-16: CI merged (PR #1, merge commit `14d9699`). `.github/workflows/tests.yml`:
   `tests` job on ubuntu-24.04 with apt Yosys 0.33 + Icarus 12.0, fails on any skipped
   test; `frontend` job runs `npm ci` + build. Actions pinned to SHAs, read-only token,
@@ -41,26 +47,28 @@ anything importing backend/; plain python3 here lacks the packages.
   `.neuralforge/settings.json` (git-ignored). Server was **not running** on 2026-11-16.
 - Evidence so far (details in `issues/001`, summarised in README Results):
   XOR 4/4 · Iris 150/150 · Attention 67/67 bit-exact on super-vl, one passing run each
-  (2026-10-19/20). gpt-oss-20b failed attention. Generated RTL from those runs was not
-  kept, so none of them can be re-checked yet. Cell counts lack the mapping mode.
+  (2026-10-19/20). gpt-oss-20b failed attention. Their RTL was not kept; only the
+  2026-11-16 XOR run in `docs/runs/` can be re-checked. October cell counts lack the
+  mapping mode.
 - CI covers Yosys 0.33 (runner) and 0.63 (this Mac). Runner-sensitive tests:
   exact 34 flip-flops (XOR), Iris needs full ABC > 45 s to hit the `-fast` path.
-- The README has no image yet.
+- README has the CI badge and the 2026-11-16 XOR screenshot.
 - Remote: check `git status -sb`; the close commit may be local only.
+- Capture script (`capture.js`) and frame extractor lived in the session scratchpad and
+  were not kept; plan 002 describes them.
 
 ## Future
 
-1. `koder/plans/002_dashboard_screenshot/INDEX.md`: a screenshot of a real XOR run,
-   never the mock (its numbers are made up), with that run's RTL and verdict saved
-   under `docs/runs/`. The Settings drawer must stay out of frame (key hint, home path).
-   Owner must pick the capture tool (plan recommends playwright-core + Brave) and
-   approve the npm download before step 4.
-2. Not yet planned: repeated live runs per preset and model (pass rate, time,
-   cells); a mutation test of the gate (broken variants of the reference RTL, kill
-   rate); keeping every run's RTL.
+1. Not yet planned (pick one and write a plan): repeated live runs per preset and
+   model (pass rate, time, cells), saving every run's RTL under `docs/runs/`; a
+   mutation test of the gate (broken variants of the reference RTL, kill rate).
+2. Consider keeping a capture script in the repo (scripts/) so screenshots and saved
+   runs can be regenerated; it needs a privacy guard like the one in plan 002.
+3. The dashboard's Simulation transcript prints the simulator's temp path; a UI
+   change could hide it so full-page screenshots need no crop.
 
-Owner decisions pending: capture tool for plan 002; GitHub topics (not set; suggested
-`verilog llm-agents asic skywater-pdk yosys hardware-verification`).
+Owner decisions pending: GitHub topics (not set; suggested `verilog llm-agents asic
+skywater-pdk yosys hardware-verification`); which of Future 1 to plan next.
 
-Next action: run plan 002's Workflow on branch `docs/screenshot`, asking for the
-capture tool first.
+Next action: choose the next evidence step (repeated runs or gate mutation test) and
+write it as `koder/plans/003_*`.

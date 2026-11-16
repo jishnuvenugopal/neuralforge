@@ -1,6 +1,6 @@
 # 002 — Dashboard screenshot from a real verified run
 
-Status: **done** 2026-11-16 on branch `docs/screenshot`. Results below.
+Status: **done** 2026-11-16 · merged in PR #2 (`746c733`). Results below.
 
 ## Why
 
@@ -103,6 +103,13 @@ log, so the main image is the top 1,320 px of the full page. It is cut just abov
 the Simulation tab's Transcript box, which prints the simulator's macOS temp
 folder path. The optional GIF was skipped: its frames would need the same
 per-frame check for that path.
+
+Merged 2026-11-16 as `746c733` (PR #2; CI green on the PR: 71 tests, none
+skipped, https://github.com/jishnuvenugopal/neuralforge/actions/runs/43794376309);
+green on `main` after the merge: https://github.com/jishnuvenugopal/neuralforge/actions/runs/43794627825.
+The image loads at 1440×1320 on the repository's main page from
+`raw/main/docs/images/dashboard_xor_2026-11-16.png`, checked in a browser
+after the merge.
 
 ## Prompt
 
