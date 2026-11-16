@@ -1,6 +1,6 @@
 # 003 — Generic model providers, and the model recorded with every result
 
-Status: **done** 2026-11-16 on branch `config/generic-providers` (not merged yet).
+Status: **done** 2026-11-16 · merged in PR #3 (`fac461a`); CI green on main (run 43796871210).
 
 ## Why
 

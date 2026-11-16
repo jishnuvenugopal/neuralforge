@@ -1,5 +1,5 @@
 ---
-updated_at: 16 Nov 2026 | 08:21 AM IST
+updated_at: 16 Nov 2026 | 08:45 AM IST
 ---
 # NeuralForge — operator state
 
@@ -13,11 +13,16 @@ both served at http://localhost:8000.
 CI on a neutral runner (done), real runs others can re-verify (one so far), then measured pass rates.
 
 Run: `NEURALFORGE_NO_BROWSER=1 bash start.sh` · Tests: `python3.12 -m unittest discover -s tests -v`
-(71 tests, ~82 s, none skipped with Yosys 0.63 + Icarus 13.0). Use python3.12 for
+(75 tests, ~82 s, none skipped with Yosys 0.63 + Icarus 13.0). Use python3.12 for
 anything importing backend/; plain python3 here lacks the packages.
 
 ## Past
 
+- 2026-11-16: providers made generic (PR #3, merge `fac461a`, plan `003`): NIM (default),
+  OpenAI-compatible, Anthropic-compatible; ZYT Foundry removed. Env: `NEURALFORGE_PROVIDER`
+  + `NVIDIA_*` / `OPENAI_*` / `ANTHROPIC_*` (key, base URL, model); Settings still win.
+  Each run sends provider + model in `run_info` and `complete` (no key/hint/URL); dashboard
+  badge; README Results has a Provider · model column; saved XOR `run.json` names its model.
 - 2026-11-16: README shows a real XOR run (PR #2, merge `746c733`): super-vl, 4/4
   bit-exact, 4,111 cells, 30,063.8 um^2 full ABC, 4 iterations, 306 s. RTL + sha256
   + verdict in `docs/runs/2026-11-16_xor_super-vl/`; `docs/runs/recheck.py` re-runs
@@ -44,7 +49,8 @@ anything importing backend/; plain python3 here lacks the packages.
 ## Present
 
 - Provider `nvidia_nim`, model `nvidia/nemotron-3.5-super-vl-120b-a12b`, key saved in
-  `.neuralforge/settings.json` (git-ignored). Server was **not running** on 2026-11-16.
+  `.neuralforge/settings.json` (git-ignored). The old ZYT key is still in that file,
+  unused; ZYT works as OpenAI-compatible with base URL `https://foundry.zyt.app/v1`. Server was **not running** on 2026-11-16.
 - Evidence so far (details in `issues/001`, summarised in README Results):
   XOR 4/4 · Iris 150/150 · Attention 67/67 bit-exact on super-vl, one passing run each
   (2026-10-19/20). gpt-oss-20b failed attention. Their RTL was not kept; only the
@@ -71,4 +77,4 @@ Owner decisions pending: GitHub topics (not set; suggested `verilog llm-agents a
 skywater-pdk yosys hardware-verification`); which of Future 1 to plan next.
 
 Next action: choose the next evidence step (repeated runs or gate mutation test) and
-write it as `koder/plans/003_*`.
+write it as `koder/plans/004_*`. Any new result must name its provider and model.
