@@ -26,6 +26,16 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
+      - name: Install Yosys and Icarus Verilog
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y yosys iverilog
+
+      - name: Tool versions
+        run: |
+          yosys -V
+          iverilog -V 2>&1 | head -n 1
+
       - name: Install Python packages
         run: pip install -r backend/requirements.txt
 
