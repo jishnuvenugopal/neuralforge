@@ -1,6 +1,6 @@
 # 001 — Continuous integration for the test suite
 
-Status: **planned** 2026-11-15 · run in its own session with the prompt at the bottom.
+Status: **done** 2026-11-16 · merged in PR #1 (`14d9699`). Results below.
 
 ## Why
 
@@ -115,7 +115,17 @@ skipped tests" failed the job:
 https://github.com/jishnuvenugopal/neuralforge/actions/runs/43788343975
 Reverted in `bb45792`.
 
-CI runs: (fill in: green run on main, red skip-guard run, runner Yosys version, suite time)
+Final CI runs (runner: ubuntu-24.04, apt Yosys 0.33, Icarus 12.0):
+- Green on the PR after the fix: https://github.com/jishnuvenugopal/neuralforge/actions/runs/43788315478
+  (71 tests in 83.9 s, none skipped) and the branch tip
+  https://github.com/jishnuvenugopal/neuralforge/actions/runs/43788444722 (96.8 s).
+- Green on `main` after the merge (`14d9699`):
+  https://github.com/jishnuvenugopal/neuralforge/actions/runs/43791380191
+  (71 tests in 88.5 s, none skipped; badge reads "passing")
+- Red skip-guard run: https://github.com/jishnuvenugopal/neuralforge/actions/runs/43788343975
+- tests job takes about 2.5 min end to end; frontend about 14 s.
+- No OSS CAD Suite needed: apt Yosys works once the parser reads its format.
+  CI therefore checks an older Yosys than the dev Mac (0.63), which is extra coverage.
 
 ## Prompt
 
