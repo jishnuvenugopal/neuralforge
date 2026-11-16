@@ -81,7 +81,7 @@ was inside the frame; tested both ways before the real run.
 
 Published run (run 3), 2026-11-16 02:36:58 UTC, XOR MLP preset,
 `nvidia/nemotron-3.5-super-vl-120b-a12b` on NVIDIA NIM:
-- 4/4 bit-exact, module `mlp_xor_2_8_1`, 4 agent iterations, 308.6 s.
+- 4/4 bit-exact, module `mlp_xor_2_8_1`, 4 agent iterations, 306.3 s from clicking Run to the `complete` message.
 - 4,111 cells, 0 flip-flops (combinational design), 30,063.8 µm², 11,392 wires,
   full ABC mapping.
 - sha256 `5b07cf23951f4a31a6a45ed6392af0fcac0bacff0b80f6593641dd214f20aa9c`.

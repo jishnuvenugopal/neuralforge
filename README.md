@@ -16,7 +16,7 @@ reference simulation → optional LibreLane hardening to GDS.
 *A real run, not the mock replay: the XOR MLP preset on
 `nvidia/nemotron-3.5-super-vl-120b-a12b` (NVIDIA NIM), 16 November 2026.
 4/4 outputs match the integer reference bit-exactly; 4,111 SkyWater 130 cells,
-30,063.8 µm² (full ABC mapping), 4 agent iterations, 309 s. The "Area estimate"
+30,063.8 µm² (full ABC mapping), 4 agent iterations, 306 s from Run to complete. The "Area estimate"
 tile is the model's own pre-synthesis guess. The RTL, its sha256 and the verdict
 are saved in [`docs/runs/2026-11-16_xor_super-vl/`](docs/runs/2026-11-16_xor_super-vl/);
 re-check them with `python3.12 docs/runs/recheck.py docs/runs/2026-11-16_xor_super-vl`.
@@ -132,7 +132,7 @@ What these numbers do and do not show:
   `abc -fast` mapping produced them, and fast mapping overstates area.
 - **The October runs cannot be re-checked.** Their generated RTL and raw outputs
   were not kept. One later run can be: the XOR run from 16 November 2026 shown
-  at the top (4/4, 4,111 cells, 309 s) is saved with its RTL and sha256 in
+  at the top (4/4, 4,111 cells, 306 s) is saved with its RTL and sha256 in
   [`docs/runs/2026-11-16_xor_super-vl/`](docs/runs/2026-11-16_xor_super-vl/), and
   `python3.12 docs/runs/recheck.py docs/runs/2026-11-16_xor_super-vl` re-runs
   synthesis and the reference simulation on it. The October record, including
