@@ -96,6 +96,15 @@ Local checks, 2026-11-16 (branch `ci/tests`):
   `:99` expects Iris to fall back to `abc -fast`, which needs full ABC to take
   more than 45 s (the test patches the 90 s limit to 45 s) on the runner.
 
+First CI run, 2026-11-16 (PR #1, https://github.com/jishnuvenugopal/neuralforge/actions/runs/43786896631):
+apt gives **Yosys 0.33** and **Icarus 12.0**. frontend green (13 s). tests red:
+68/69 in 78 s; `test_registered_design_passes_and_reset_flops_are_counted`
+got `0 != 34` flip-flops. Cause: `_parse_stat` (`backend/eda_tools.py:155-158`)
+matches flip-flop rows only in the 0.4x layout (`count [area] cell`); 0.33
+prints `cell count`. Cells and wires already have an old-format fallback;
+flip-flops do not. So on Yosys 0.33 the dashboard would report 0 flip-flops.
+The Iris `abc -fast` fallback test passed on the runner. Skip check passed (no skips).
+
 CI runs: (fill in: green run on main, red skip-guard run, runner Yosys version, suite time)
 
 ## Prompt
