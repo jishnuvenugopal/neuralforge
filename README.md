@@ -11,6 +11,17 @@ it never writes or grades the test.
 Pipeline: request → hardware bill of materials → RTL → synthesis gate →
 reference simulation → optional LibreLane hardening to GDS.
 
+![NeuralForge dashboard after a real XOR MLP run: 4/4 outputs match the integer reference bit-exactly](docs/images/dashboard_xor_2026-11-16.png)
+
+*A real run, not the mock replay: the XOR MLP preset on
+`nvidia/nemotron-3.5-super-vl-120b-a12b` (NVIDIA NIM), 16 November 2026.
+4/4 outputs match the integer reference bit-exactly; 4,111 SkyWater 130 cells,
+30,063.8 µm² (full ABC mapping), 4 agent iterations, 309 s. The "Area estimate"
+tile is the model's own pre-synthesis guess. The RTL, its sha256 and the verdict
+are saved in [`docs/runs/2026-11-16_xor_super-vl/`](docs/runs/2026-11-16_xor_super-vl/);
+re-check them with `python3.12 docs/runs/recheck.py docs/runs/2026-11-16_xor_super-vl`.
+Synthesis panel of the same run: [`docs/images/synthesis_xor_2026-11-16.png`](docs/images/synthesis_xor_2026-11-16.png).*
+
 ## Quick start
 
 ```bash
@@ -119,9 +130,13 @@ What these numbers do and do not show:
   simple tool-calling probe, so probe speed did not predict preset results.
 - **Cell counts are approximate.** The runs did not record whether full or
   `abc -fast` mapping produced them, and fast mapping overstates area.
-- **The runs cannot be re-checked yet.** Their generated RTL and raw outputs
-  were not kept. The record, including a tool-calling probe of eight NIM
-  models, is in
+- **The October runs cannot be re-checked.** Their generated RTL and raw outputs
+  were not kept. One later run can be: the XOR run from 16 November 2026 shown
+  at the top (4/4, 4,111 cells, 309 s) is saved with its RTL and sha256 in
+  [`docs/runs/2026-11-16_xor_super-vl/`](docs/runs/2026-11-16_xor_super-vl/), and
+  `python3.12 docs/runs/recheck.py docs/runs/2026-11-16_xor_super-vl` re-runs
+  synthesis and the reference simulation on it. The October record, including
+  a tool-calling probe of eight NIM models, is in
   [`koder/issues/001_nim_provider_testing/INDEX.md`](koder/issues/001_nim_provider_testing/INDEX.md).
 - **Wall time is mostly provider latency.** Model turns took 200–650 s each
   on those days.
@@ -150,6 +165,7 @@ neuralforge/
 │   ├── golden.py        bit-exact integer references (XOR, Iris, attention)
 │   ├── verifier.py      source scan, generated testbench, verdict, hash ledger
 │   └── model_trainer.py trains and quantizes the demo models
+├── docs/                README images and saved runs (docs/runs/recheck.py re-verifies one)
 ├── frontend/            React + Vite UI (built into frontend/dist)
 ├── pdk/                 SkyWater 130 nm liberty (Apache-2.0, see pdk/NOTICE)
 ├── koder/               development notes: session hand-off and issue records
