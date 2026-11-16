@@ -152,8 +152,12 @@ def _parse_stat(stdout: str) -> dict:
     wires = last_int(r"^\s*(\d+)\s+(?:-\s+)?wires\s*$", r"Number of wires:\s+(\d+)")
 
     # Every sky130 flip-flop: dfxtp, dfrtp (reset), dfstp (set), dfbbp, edfxtp, sdfxtp, ...
+    # Rows are `count [area] cell` in Yosys 0.4x and `cell count` in older releases (0.33).
+    cell_rows = re.findall(r"^\s*(\d+)\s+(?:\S+\s+)?sky130_fd_sc_hd__(\w+)\s*$", stdout, re.MULTILINE)
+    cell_rows += [(count, cell) for cell, count in
+                  re.findall(r"^\s*sky130_fd_sc_hd__(\w+)\s+(\d+)\s*$", stdout, re.MULTILINE)]
     flip_flops = 0
-    for count, cell in re.findall(r"^\s*(\d+)\s+(?:\S+\s+)?sky130_fd_sc_hd__(\w+)\s*$", stdout, re.MULTILINE):
+    for count, cell in cell_rows:
         if re.match(r"(s?e?df)", cell):
             flip_flops += int(count)
 

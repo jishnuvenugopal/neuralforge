@@ -1,5 +1,7 @@
 # NeuralForge
 
+[![tests](https://github.com/jishnuvenugopal/neuralforge/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/jishnuvenugopal/neuralforge/actions/workflows/tests.yml)
+
 An LLM agent turns a plain-English request for a small neural network into
 Verilog with the trained INT8 weights baked in. Yosys synthesizes it to
 SkyWater 130 nm cells, and Icarus Verilog checks every output bit-exactly
@@ -205,7 +207,10 @@ of `python3.12`, `python3.13`, `python3.11` and `python3` it finds):
 python3.12 -m unittest discover -s tests -v
 ```
 
-The simulator tests skip themselves when the tools are missing.
+The simulator tests skip themselves when the tools are missing. CI
+(`.github/workflows/tests.yml`) runs the suite on Ubuntu 24.04 with apt's
+Yosys and Icarus on every push and pull request, and fails if any test is
+skipped, so a green badge means the gate itself was tested.
 
 ## Notes
 
