@@ -83,6 +83,7 @@ const initialState = {
   synthStats: null,
   netlistSvg: "",
   simulation: null,
+  runModel: null,
   layoutPng: "",
   loading: false,
   activeTab: "code",
@@ -202,6 +203,8 @@ function reducer(state, action) {
         layoutPng: action.gds_png,
         messages: [...state.messages, { type: "layout", text: "Layout artifact generated", time: new Date() }],
       };
+    case "run_info":
+      return { ...state, runModel: { provider: action.provider_label, model: action.model } };
     case "complete":
       return {
         ...state,
@@ -1086,7 +1089,7 @@ function TabBar({ activeTab, onTabChange }) {
 }
 
 function RightPanel({ state, dispatch }) {
-  const { activeTab, verilogCode, moduleName, synthStats, netlistSvg, simulation } = state;
+  const { activeTab, verilogCode, moduleName, synthStats, netlistSvg, simulation, runModel } = state;
 
   return (
     <section className={cx(surfaceClass, "flex h-full min-h-[600px] flex-col overflow-hidden")}>
@@ -1099,6 +1102,11 @@ function RightPanel({ state, dispatch }) {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {runModel ? (
+              <Badge tone="muted">
+                {runModel.provider} · {runModel.model}
+              </Badge>
+            ) : null}
             {moduleName ? <Badge tone="outline">{moduleName}</Badge> : null}
             {synthStats?.total_cells != null ? <Badge tone="info">{synthStats.total_cells} cells</Badge> : null}
             {simulation ? (

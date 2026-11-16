@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 
-const PROVIDER_ORDER = ["nvidia_nim", "zyt_foundry", "openai_compatible", "anthropic_compatible"];
+const PROVIDER_ORDER = ["nvidia_nim", "openai_compatible", "anthropic_compatible"];
 
 const PROVIDER_BLURBS = {
   nvidia_nim: "Default. NVIDIA's hosted models (Kimi, GLM, DeepSeek, Nemotron) with a free daily allowance.",
-  zyt_foundry: "OpenAI-compatible gateway with the gpt-5.5 to gpt-6.1 family.",
-  openai_compatible: "Any endpoint that speaks /v1/chat/completions with tools.",
+  openai_compatible: "Any endpoint that speaks /v1/chat/completions with tools: OpenAI, a gateway, or a local server.",
   anthropic_compatible: "Any endpoint that speaks the Anthropic Messages API with tools.",
 };
 
@@ -208,6 +207,12 @@ function ProviderForm({ settings, onSaved }) {
             spellCheck={false}
           />
         </label>
+        {provider.key_env ? (
+          <p className="text-[11px] leading-5 text-muted-foreground">
+            Or set <code>{provider.key_env}</code>, <code>{provider.url_env}</code> and{" "}
+            <code>{provider.model_env}</code> before starting; values saved here win.
+          </p>
+        ) : null}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Model</span>

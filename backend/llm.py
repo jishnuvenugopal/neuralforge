@@ -1,7 +1,7 @@
 """
 Provider-neutral agent conversation over two wire protocols:
 
-- OpenAI-compatible chat completions with function tools (ZYT Foundry, OpenAI, ...)
+- OpenAI-compatible chat completions with function tools (NVIDIA NIM, OpenAI, gateways, ...)
 - Anthropic-compatible Messages API with tool use
 
 Both keep the history append-only: every model turn is stored as returned and
@@ -119,7 +119,7 @@ class OpenAIConversation(Conversation):
             })
 
     def _stream(self, **params) -> tuple[str, list]:
-        """One streamed chat completion (some gateways, ZYT Foundry included, require streaming).
+        """One streamed chat completion (some gateways accept only streaming requests).
 
         Returns (text, tool_calls) with tool-call fragments joined by their index.
         """

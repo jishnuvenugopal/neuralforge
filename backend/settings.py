@@ -3,13 +3,14 @@ LLM provider settings, stored in a local file next to the project.
 
 Providers:
 - nvidia_nim            NVIDIA NIM hosted API (OpenAI-compatible). Default provider.
-- zyt_foundry           ZYT Foundry (OpenAI-compatible), default model gpt-6-astra.
 - openai_compatible     any OpenAI-compatible endpoint (base URL, key, model)
 - anthropic_compatible  any Anthropic-compatible endpoint (base URL, key, model)
 
 Environment variables seed the defaults; values saved from the settings page win.
+  NEURALFORGE_PROVIDER  nvidia_nim | openai_compatible | anthropic_compatible
   NVIDIA_API_KEY, NVIDIA_NIM_BASE_URL, NVIDIA_NIM_MODEL
-  ZYT_FOUNDRY_API_KEY, ZYT_FOUNDRY_BASE_URL, ZYT_FOUNDRY_MODEL
+  OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL
+  ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, ANTHROPIC_MODEL
   NEURALFORGE_HOME      folder for settings.json (default: <project>/.neuralforge)
 """
 
@@ -40,17 +41,6 @@ NVIDIA_NIM_MODELS = [
     "moonshotai/kimi-k2.6",
 ]
 
-ZYT_FOUNDRY_MODELS = [
-    "gpt-6-astra",
-    "gpt-6.1-sol",
-    "gpt-6-sol",
-    "gpt-6-luna",
-    "gpt-5.6-sol",
-    "gpt-5.6-luna",
-    "gpt-5.6-terra",
-    "gpt-5.5",
-]
-
 # env: names of the environment variables that seed key, URL and model.
 PROVIDERS = {
     "nvidia_nim": {
@@ -63,15 +53,6 @@ PROVIDERS = {
         "env": {"key": "NVIDIA_API_KEY", "url": "NVIDIA_NIM_BASE_URL", "model": "NVIDIA_NIM_MODEL"},
         "key_help": "https://build.nvidia.com",
     },
-    "zyt_foundry": {
-        "label": "ZYT Foundry",
-        "kind": "openai",
-        "base_url": "https://foundry.zyt.app/v1",
-        "model": "gpt-6-astra",
-        "models": ZYT_FOUNDRY_MODELS,
-        "fixed_url": True,
-        "env": {"key": "ZYT_FOUNDRY_API_KEY", "url": "ZYT_FOUNDRY_BASE_URL", "model": "ZYT_FOUNDRY_MODEL"},
-    },
     "openai_compatible": {
         "label": "OpenAI-compatible",
         "kind": "openai",
@@ -79,7 +60,7 @@ PROVIDERS = {
         "model": "",
         "models": [],
         "fixed_url": False,
-        "env": {},
+        "env": {"key": "OPENAI_API_KEY", "url": "OPENAI_BASE_URL", "model": "OPENAI_MODEL"},
     },
     "anthropic_compatible": {
         "label": "Anthropic-compatible",
@@ -88,10 +69,11 @@ PROVIDERS = {
         "model": "claude-opus-5-5",
         "models": ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
         "fixed_url": False,
-        "env": {},
+        "env": {"key": "ANTHROPIC_API_KEY", "url": "ANTHROPIC_BASE_URL", "model": "ANTHROPIC_MODEL"},
     },
 }
 DEFAULT_PROVIDER = "nvidia_nim"
+PROVIDER_ENV = "NEURALFORGE_PROVIDER"   # picks the provider when Settings has not saved one
 
 
 @dataclass
@@ -133,7 +115,7 @@ def _resolve(provider: str, saved: dict) -> ProviderConfig:
     if spec["fixed_url"]:
         base_url = _env(provider, "url") or spec["base_url"]
     else:
-        base_url = entry.get("base_url") or spec["base_url"]
+        base_url = entry.get("base_url") or _env(provider, "url") or spec["base_url"]
     model = entry.get("model") or _env(provider, "model") or spec["model"]
     return ProviderConfig(
         provider=provider,
@@ -147,7 +129,11 @@ def _resolve(provider: str, saved: dict) -> ProviderConfig:
 
 def active_config() -> ProviderConfig:
     saved = _read()
-    provider = saved.get("active_provider", DEFAULT_PROVIDER)
+    # Saved choice, then NEURALFORGE_PROVIDER, then the default. A saved provider that
+    # no longer exists (one removed from PROVIDERS) falls through to the next.
+    provider = saved.get("active_provider")
+    if provider not in PROVIDERS:
+        provider = os.environ.get(PROVIDER_ENV, "").strip()
     if provider not in PROVIDERS:
         provider = DEFAULT_PROVIDER
     return _resolve(provider, saved)
@@ -177,6 +163,8 @@ def public_view() -> dict:
             "key_hint": _key_hint(config.api_key),
             "key_source": "settings" if entry.get("api_key") else ("environment" if config.api_key else None),
             "key_env": spec["env"].get("key", ""),
+            "url_env": spec["env"].get("url", ""),
+            "model_env": spec["env"].get("model", ""),
             "key_help": spec.get("key_help", ""),
         }
     return {

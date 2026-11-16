@@ -1,5 +1,6 @@
 """Settings store and both provider wires, with fake SDK clients (no network)."""
 
+import asyncio
 import json
 import os
 import sys
@@ -27,8 +28,11 @@ class SettingsTest(unittest.TestCase):
         ]
         for p in self.patches:
             p.start()
-        for name in ("ZYT_FOUNDRY_API_KEY", "ZYT_FOUNDRY_BASE_URL", "ZYT_FOUNDRY_MODEL",
-                     "NVIDIA_API_KEY", "NVIDIA_NIM_BASE_URL", "NVIDIA_NIM_MODEL"):
+        # Every variable the settings read, so this machine's environment cannot leak in.
+        names = {settings.PROVIDER_ENV}
+        for spec in settings.PROVIDERS.values():
+            names.update(spec["env"].values())
+        for name in names:
             os.environ.pop(name, None)
         self.path = path
 
@@ -47,13 +51,15 @@ class SettingsTest(unittest.TestCase):
         self.assertFalse(view["configured"])
         self.assertEqual(view["providers"]["nvidia_nim"]["key_env"], "NVIDIA_API_KEY")
 
-    def test_zyt_foundry_defaults_to_gpt_6_astra(self):
-        settings.update({"active_provider": "zyt_foundry"})
-        config = settings.active_config()
-        self.assertEqual((config.base_url, config.model), ("https://foundry.zyt.app/v1", "gpt-6-astra"))
-        models = settings.public_view()["providers"]["zyt_foundry"]["models"]
-        self.assertEqual(len(models), 8)
-        self.assertIn("gpt-6.1-sol", models)
+    def test_providers_are_generic(self):
+        self.assertEqual(list(settings.PROVIDERS), ["nvidia_nim", "openai_compatible", "anthropic_compatible"])
+        view = settings.public_view()["providers"]
+        self.assertEqual(
+            [(view[p]["key_env"], view[p]["url_env"], view[p]["model_env"]) for p in view],
+            [("NVIDIA_API_KEY", "NVIDIA_NIM_BASE_URL", "NVIDIA_NIM_MODEL"),
+             ("OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL"),
+             ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL")],
+        )
 
     def test_nvidia_key_from_the_environment(self):
         with mock.patch.dict(os.environ, {"NVIDIA_API_KEY": "nvapi-test-0000-9876", "NVIDIA_NIM_MODEL": "z-ai/glm-5.3"}):
@@ -63,13 +69,43 @@ class SettingsTest(unittest.TestCase):
         self.assertTrue(view["configured"])
         self.assertEqual(view["providers"]["nvidia_nim"]["key_source"], "environment")
 
-    def test_environment_key_and_url(self):
-        settings.update({"active_provider": "zyt_foundry"})
-        with mock.patch.dict(os.environ, {"ZYT_FOUNDRY_API_KEY": "zyt-test-0000-1234", "ZYT_FOUNDRY_BASE_URL": "https://x.test/v1"}):
+    def test_environment_alone_configures_an_openai_compatible_endpoint(self):
+        env = {"NEURALFORGE_PROVIDER": "openai_compatible", "OPENAI_API_KEY": "sk-test-0000-1234",
+               "OPENAI_BASE_URL": "https://gw.test/v1/", "OPENAI_MODEL": "gpt-test"}
+        with mock.patch.dict(os.environ, env):
             config = settings.active_config()
             view = settings.public_view()
-        self.assertEqual((config.api_key, config.base_url), ("zyt-test-0000-1234", "https://x.test/v1"))
-        self.assertEqual(view["providers"]["zyt_foundry"]["key_source"], "environment")
+        self.assertEqual((config.provider, config.api_key, config.base_url, config.model),
+                         ("openai_compatible", "sk-test-0000-1234", "https://gw.test/v1", "gpt-test"))
+        self.assertTrue(view["configured"])
+        self.assertEqual(view["providers"]["openai_compatible"]["key_source"], "environment")
+        self.assertNotIn("sk-test-0000-1234", json.dumps(view))
+
+    def test_saved_settings_win_over_the_environment(self):
+        settings.update({"active_provider": "nvidia_nim",
+                         "providers": {"openai_compatible": {"base_url": "https://saved.test/v1"}}})
+        with mock.patch.dict(os.environ, {"NEURALFORGE_PROVIDER": "openai_compatible",
+                                          "OPENAI_BASE_URL": "https://env.test/v1"}):
+            self.assertEqual(settings.active_config().provider, "nvidia_nim")
+            self.assertEqual(settings.provider_config("openai_compatible").base_url, "https://saved.test/v1")
+
+    def test_unknown_provider_in_environment_falls_back_to_nim(self):
+        with mock.patch.dict(os.environ, {"NEURALFORGE_PROVIDER": "nope"}):
+            self.assertEqual(settings.active_config().provider, "nvidia_nim")
+
+    def test_settings_file_from_a_removed_provider_still_loads(self):
+        old = {"active_provider": "zyt_foundry",
+               "providers": {"zyt_foundry": {"api_key": "old-key-5678", "model": "gpt-6-astra"}}}
+        with open(self.path, "w") as f:
+            json.dump(old, f)
+        config = settings.active_config()
+        self.assertEqual((config.provider, config.api_key), ("nvidia_nim", ""))
+        view = settings.public_view()
+        self.assertNotIn("zyt_foundry", view["providers"])
+        self.assertNotIn("old-key-5678", json.dumps(view))
+        settings.update({"providers": {"nvidia_nim": {"model": "z-ai/glm-5.3"}}})
+        with open(self.path) as f:
+            self.assertEqual(json.load(f)["providers"]["zyt_foundry"]["api_key"], "old-key-5678")
 
     def test_keys_are_saved_privately_and_never_returned(self):
         view = settings.update({"providers": {"nvidia_nim": {"api_key": "secret-key-abcd"}}})
@@ -78,14 +114,13 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(view["providers"]["nvidia_nim"]["key_hint"], "…abcd")
         self.assertEqual(os.stat(self.path).st_mode & 0o777, 0o600)
 
-    def test_foundry_model_is_selectable_but_its_url_is_fixed(self):
-        settings.update({"active_provider": "zyt_foundry",
-                         "providers": {"zyt_foundry": {"model": "gpt-6.1-sol", "base_url": "https://evil.test"}}})
+    def test_nim_model_is_selectable_but_its_url_is_fixed(self):
+        settings.update({"providers": {"nvidia_nim": {"model": "z-ai/glm-5.3", "base_url": "https://evil.test"}}})
         config = settings.active_config()
-        self.assertEqual((config.model, config.base_url), ("gpt-6.1-sol", "https://foundry.zyt.app/v1"))
-        with mock.patch.dict(os.environ, {"ZYT_FOUNDRY_MODEL": "gpt-5.5"}):
-            settings.update({"providers": {"zyt_foundry": {"model": ""}}})
-            self.assertEqual(settings.active_config().model, "gpt-5.5")
+        self.assertEqual((config.model, config.base_url), ("z-ai/glm-5.3", "https://integrate.api.nvidia.com/v1"))
+        with mock.patch.dict(os.environ, {"NVIDIA_NIM_MODEL": "openai/gpt-oss-20b"}):
+            settings.update({"providers": {"nvidia_nim": {"model": ""}}})
+            self.assertEqual(settings.active_config().model, "openai/gpt-oss-20b")
 
     def test_fetched_model_lists_are_remembered(self):
         view = settings.save_models("openai_compatible", ["b-model", "a-model", "a-model"])
@@ -115,7 +150,7 @@ class SettingsTest(unittest.TestCase):
             settings.update({"providers": {"openai_compatible": {"base_url": "ftp://x"}}})
 
 
-def config(kind="openai", base_url="https://foundry.zyt.app/v1"):
+def config(kind="openai", base_url="https://gw.test/v1"):
     return settings.ProviderConfig("p", "Test", kind, base_url, "m", "key")
 
 
@@ -179,7 +214,7 @@ class OpenAIWireTest(unittest.TestCase):
         self.assertTrue(create.call_args.kwargs["stream"])
 
     def test_a_stream_with_no_data_is_an_error(self):
-        # ZYT Foundry, 19 Oct 2026: HTTP 200 with a JSON body instead of SSE; the SDK yields no chunks.
+        # Seen from a gateway on 19 Oct 2026: HTTP 200 with a JSON body instead of SSE; the SDK yields no chunks.
         conversation, _ = self.make([])
         with self.assertRaisesRegex(llm.LLMError, "streamed no data"):
             conversation.next_turn()
@@ -192,7 +227,51 @@ class OpenAIWireTest(unittest.TestCase):
 
     def test_missing_key_is_a_clear_error(self):
         with self.assertRaisesRegex(llm.LLMError, "No API key"):
-            llm.open_conversation(settings.ProviderConfig("p", "ZYT Foundry", "openai", "https://x", "m", ""), "S", [])
+            llm.open_conversation(settings.ProviderConfig("p", "Gateway", "openai", "https://x", "m", ""), "S", [])
+
+
+
+class RunRecordTest(unittest.TestCase):
+    """Every run says which provider and model produced it, and nothing secret."""
+
+    def test_run_info_and_complete_name_the_model_snapshotted_at_start(self):
+        try:
+            import main
+        except ImportError as e:
+            self.skipTest(f"main.py dependencies missing: {e}")
+
+        first = settings.ProviderConfig("nvidia_nim", "NVIDIA NIM", "openai",
+                                        "https://private-gw.test/v1", "model-a", "secret-key-9999")
+        second = settings.ProviderConfig("openai_compatible", "OpenAI-compatible", "openai",
+                                         "https://other.test/v1", "model-b", "other-key-8888")
+        active = mock.Mock(return_value=first)
+
+        def next_turn():
+            active.return_value = second   # Settings changed mid-run
+            return llm.Turn(texts=["done"])
+
+        conversation = mock.Mock(next_turn=next_turn)
+
+        class FakeSocket:
+            def __init__(self):
+                self.sent = []
+
+            async def send_json(self, data):
+                self.sent.append(data)
+
+        socket = FakeSocket()
+        with mock.patch.object(main.nf_settings, "active_config", active), \
+                mock.patch.object(main, "open_conversation", return_value=conversation):
+            asyncio.run(main.run_agent_loop(socket, "say hello"))
+
+        info = next(m for m in socket.sent if m["type"] == "run_info")
+        done = next(m for m in socket.sent if m["type"] == "complete")
+        expected = {"provider": "nvidia_nim", "provider_label": "NVIDIA NIM", "model": "model-a"}
+        self.assertEqual({k: info[k] for k in expected}, expected)
+        self.assertEqual({k: done[k] for k in expected}, expected)
+        sent = json.dumps(socket.sent)
+        for secret in ("secret-key-9999", "9999", "private-gw.test"):
+            self.assertNotIn(secret, sent)
 
 
 class FakeStream:
