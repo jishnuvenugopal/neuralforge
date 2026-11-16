@@ -27,6 +27,8 @@ def main(folder: str) -> int:
     with open(os.path.join(folder, "design.v")) as f:
         code = f.read()
 
+    print(f"run         {run.get('date_utc', '?')} · {run.get('provider_label', '?')} · "
+          f"{run.get('model', '?')} · preset {run['preset']}")
     digest = verifier.sha256(code)
     print(f"sha256      {digest}  ({'matches' if digest == run['sha256'] else 'DIFFERS from'} run.json)")
 

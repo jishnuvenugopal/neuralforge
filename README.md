@@ -45,28 +45,42 @@ light-mode switch for the current visit. On first launch the **Settings** drawer
 | Provider | Wire protocol | Model | Notes |
 |---|---|---|---|
 | **NVIDIA NIM** (default) | OpenAI-compatible | `nvidia/nemotron-3.5-super-vl-120b-a12b` by default; Nemotron, GLM, GPT-OSS and more | Base URL `https://integrate.api.nvidia.com/v1`; free key at [build.nvidia.com](https://build.nvidia.com) |
-| ZYT Foundry | OpenAI-compatible (streaming only) | `gpt-6-astra` by default; any of gpt-5.5 … gpt-6.1-sol | Base URL `https://foundry.zyt.app/v1` |
-| OpenAI-compatible | `/v1/chat/completions` with tools | any | Your base URL, key and model |
+| OpenAI-compatible | `/v1/chat/completions` with tools | any | OpenAI, a gateway or a local server: your base URL, key and model |
 | Anthropic-compatible | Messages API with tool use | any (default `claude-opus-5-5`) | Your base URL, key and model |
 
 Pick the model from the dropdown in the header or in Settings. *Load models*
 asks the provider's `/models` endpoint for its current list.
 
-Environment variables seed the defaults; values saved in Settings win:
+Settings is the usual way to set these. Environment variables also work, which
+suits headless runs and CI; values saved in Settings win over them.
+`NEURALFORGE_PROVIDER` picks the provider (default `nvidia_nim`), then each
+provider reads its own key, base URL and model:
 
 ```bash
-export NVIDIA_API_KEY="nvapi-..."          # optional; the Settings drawer is the usual way
+# NVIDIA NIM (default provider)
+export NVIDIA_API_KEY="nvapi-..."
 export NVIDIA_NIM_MODEL="nvidia/nemotron-3.5-super-vl-120b-a12b"
-export ZYT_FOUNDRY_API_KEY="..."
-export ZYT_FOUNDRY_MODEL="gpt-6-astra"
-export LIBRELANE_AUTO_HARDEN=1              # optional: run LibreLane after a verified simulation
+
+# Any OpenAI-compatible endpoint
+export NEURALFORGE_PROVIDER=openai_compatible
+export OPENAI_API_KEY="..."
+export OPENAI_BASE_URL="https://api.openai.com/v1"   # or your gateway / local server
+export OPENAI_MODEL="your-model-id"
+
+# Any Anthropic-compatible endpoint
+export NEURALFORGE_PROVIDER=anthropic_compatible
+export ANTHROPIC_API_KEY="..."
+export ANTHROPIC_BASE_URL="https://api.anthropic.com"
+export ANTHROPIC_MODEL="claude-opus-5-5"
+
+export LIBRELANE_AUTO_HARDEN=1   # optional: run LibreLane after a verified simulation
 ```
 
 Other variables the code reads:
 
 | Variable | Default | Sets |
 |---|---|---|
-| `NVIDIA_NIM_BASE_URL`, `ZYT_FOUNDRY_BASE_URL` | the URLs in the provider table | base URL for those two providers |
+| `NVIDIA_NIM_BASE_URL` | `https://integrate.api.nvidia.com/v1` | NIM base URL (not editable in Settings) |
 | `NEURALFORGE_PORT` | `8000` | server port |
 | `NEURALFORGE_NO_BROWSER` | unset | `1` stops `start.sh` opening a browser |
 | `NEURALFORGE_HOME` | `.neuralforge/` | folder for saved settings and keys |
@@ -107,16 +121,23 @@ A free-form request that matches no preset is synthesized but reported as
 
 ## Results
 
-Live runs on 19–20 October 2026 with `nvidia/nemotron-3.5-super-vl-120b-a12b`
-on NVIDIA NIM, driven through the same WebSocket the dashboard uses. A run
-passes when every output the design produces equals the integer reference.
-That is the gate's score, not classification accuracy.
+Live runs driven through the same WebSocket the dashboard uses. A run passes
+when every output the design produces equals the integer reference. That is the
+gate's score, not classification accuracy. Every row names the provider and model
+that produced it.
 
-| Preset | Outputs matching the reference | Cells | Agent iterations | Wall time |
-|---|---|---|---|---|
-| XOR MLP | 4/4 | 3,978 | 4 | 169 s |
-| Iris classifier | 150/150 | 21,120 | 3 | 647 s |
-| Attention head | 67/67 | 491,948 | 3 | 1,316 s |
+| Date | Provider · model | Preset | Outputs matching the reference | Cells | Agent iterations | Wall time | Re-checkable |
+|---|---|---|---|---|---|---|---|
+| 2026-10-20 | NVIDIA NIM · `nvidia/nemotron-3.5-super-vl-120b-a12b` | XOR MLP | 4/4 | 3,978 | 4 | 169 s | no |
+| 2026-10-19/20 | NVIDIA NIM · `nvidia/nemotron-3.5-super-vl-120b-a12b` | Iris classifier | 150/150 | 21,120 | 3 | 647 s | no |
+| 2026-10-19/20 | NVIDIA NIM · `nvidia/nemotron-3.5-super-vl-120b-a12b` | Attention head | 67/67 | 491,948 | 3 | 1,316 s | no |
+| 2026-11-16 | NVIDIA NIM · `nvidia/nemotron-3.5-super-vl-120b-a12b` | XOR MLP | 4/4 | 4,111 | 4 | 306 s | [yes](docs/runs/2026-11-16_xor_super-vl/) |
+
+**How the model is recorded.** The backend snapshots the provider and model when
+a run starts and sends them in the run's first WebSocket message (`run_info`) and
+its last (`complete`). The dashboard shows them as a badge in the Design workspace,
+and a saved run keeps them as `provider` and `model` in its `run.json`. Keys, key
+hints and base URLs are never part of a run record.
 
 What these numbers do and do not show:
 

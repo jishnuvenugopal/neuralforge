@@ -5,7 +5,7 @@
 #                          http://localhost:8000 and open the browser
 #   bash start.sh --dev    hot-reloading UI on :5173 (backend still on :8000)
 #
-# API keys are set in the app (Settings). ZYT_FOUNDRY_API_KEY in the environment also works.
+# API keys are set in the app (Settings). Environment variables also work: see README, "Model providers".
 # NEURALFORGE_PORT changes the port; NEURALFORGE_NO_BROWSER=1 skips opening the browser.
 
 set -euo pipefail

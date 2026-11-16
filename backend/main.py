@@ -454,6 +454,10 @@ async def run_agent_loop(websocket: WebSocket, user_prompt: str):
         )
 
     config = nf_settings.active_config()
+    # Which provider and model produced this run: snapshotted once, so a Settings change
+    # mid-run cannot relabel it. Never includes the key, key hint or base URL.
+    run_model = {"provider": config.provider, "provider_label": config.label, "model": config.model}
+    await ws_send(websocket, {"type": "run_info", **run_model})
     try:
         conversation = open_conversation(config, SYSTEM_PROMPT, TOOL_DECLARATIONS)
     except LLMError as e:
@@ -578,7 +582,7 @@ async def run_agent_loop(websocket: WebSocket, user_prompt: str):
             # Agent finished -- no more tool calls
             break
 
-    await ws_send(websocket, {"type": "complete", "iterations": iteration})
+    await ws_send(websocket, {"type": "complete", "iterations": iteration, **run_model})
 
 
 # ---------------------------------------------------------------------------
