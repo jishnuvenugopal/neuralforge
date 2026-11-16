@@ -80,7 +80,23 @@ the result visible to anyone reading the repo.
 
 ## Results
 
-(fill in: run URLs, runner Yosys version, suite time on CI)
+Local checks, 2026-11-16 (branch `ci/tests`):
+
+- Fresh venv (python 3.12.12, only `backend/requirements.txt`; packages from
+  PyPI/pip cache: fastapi 0.163.1, uvicorn 0.54.0, openai 3.51.0,
+  anthropic 2.8.0, numpy 2.5.5): 69 tests OK in 81.4 s, none skipped. No
+  change to `requirements.txt` needed.
+- Same venv with `PATH=/usr/bin:/bin` (no Yosys/Icarus): `OK (skipped=11)`,
+  exit 0. That is the false green; the workflow's skip check fails on it.
+- No test needs an API key: provider tests use a temp settings dir and fake keys.
+- `gh` token has the `workflow` scope.
+- Actions pinned via `gh api`: checkout v7.0.1, setup-python v7.1.0, setup-node v7.1.0.
+- Runner-sensitive assertions (report, do not loosen):
+  `tests/test_exploits_eda.py:90` expects exactly 34 flip-flops for XOR;
+  `:99` expects Iris to fall back to `abc -fast`, which needs full ABC to take
+  more than 45 s (the test patches the 90 s limit to 45 s) on the runner.
+
+CI runs: (fill in: green run on main, red skip-guard run, runner Yosys version, suite time)
 
 ## Prompt
 
