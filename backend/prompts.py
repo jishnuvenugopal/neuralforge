@@ -1,5 +1,5 @@
 """
-Gemini system prompt and tool declarations for AI chip architect.
+System prompt and tool declarations for the AI chip architect (provider-neutral).
 Decomposes ML models into hardware blocks and generates Verilog RTL.
 """
 

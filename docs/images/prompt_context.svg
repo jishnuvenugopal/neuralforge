@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 880" width="1200" height="880" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>What the model sees</title>
+  <desc>The context for one run. Built before the first turn: the system prompt (role, five-step workflow, BOM JSON shape, Verilog rules, what the gate rejects), four tool schemas, and the first user message, which is the request plus, when a preset matches, every INT8 constant under a unique name, a weight summary and a port contract. Added after every turn, with nothing edited or dropped: the model turn as returned, one JSON tool result per call, and a nudge only if the model stopped early. A tool result carries: for analyze_model an instruction and the weight summary; for synthesize_verilog a sha256 prefix, cell stats and the next tool on a pass, or the gate's reasons on a fail; for simulate_verilog the status, reason, matches out of total and the first 5 mismatches, or compiler output cut to 1,500 characters; for fix_error a reminder to resubmit. Never sent to the model: the testbench, expected outputs other than those in a reported mismatch, and anything from an earlier run.</desc>
+  <defs>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6fbf98"/>
+    </marker>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="1199" height="879" rx="24" fill="#0f1115" stroke="#24272f"/>
+
+  <text x="48" y="64" font-size="28" font-weight="700" fill="#eef0f4">What the model sees</text>
+  <text x="48" y="96" font-size="17" fill="#b4b9c6">One message list per run. It is built before the first turn, then only grows, and every turn sends all of it.</text>
+
+  <!-- ===== built before the first turn ===== -->
+  <text x="48" y="142" font-size="14" font-weight="600" letter-spacing="1.2" fill="#858b99">BUILT BEFORE THE FIRST TURN</text>
+
+  <rect x="48" y="156" width="660" height="92" rx="14" fill="#1a1c22" stroke="#30333c"/>
+  <text x="68" y="187" font-size="17" font-weight="700" fill="#eef0f4">System prompt <tspan font-size="14" font-weight="400" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#858b99"> SYSTEM_PROMPT</tspan></text>
+  <text x="688" y="187" text-anchor="end" font-size="14" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#858b99">system</text>
+  <text font-size="15" fill="#b4b9c6"><tspan x="68" y="212">The role, a five-step workflow, the JSON shape of the BOM, the Verilog rules</tspan><tspan x="68" y="233">Yosys accepts, and what the gate will reject.</tspan></text>
+
+  <rect x="48" y="260" width="660" height="92" rx="14" fill="#1a1c22" stroke="#30333c"/>
+  <text x="68" y="291" font-size="17" font-weight="700" fill="#eef0f4">Tool schemas <tspan font-size="14" font-weight="400" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#858b99"> TOOL_DECLARATIONS</tspan></text>
+  <text x="688" y="291" text-anchor="end" font-size="14" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#858b99">tools</text>
+  <text font-size="15" fill="#b4b9c6"><tspan x="68" y="316">Four tools with JSON Schema parameters, written once and converted to</tspan><tspan x="68" y="337">each provider's tool format.</tspan></text>
+
+  <rect x="48" y="364" width="660" height="196" rx="14" fill="#1a1c22" stroke="#30333c"/>
+  <text x="68" y="395" font-size="17" font-weight="700" fill="#eef0f4">First user message</text>
+  <text x="688" y="395" text-anchor="end" font-size="14" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#858b99">user</text>
+  <text x="68" y="420" font-size="15" fill="#b4b9c6">The request as typed, or a preset's prompt.</text>
+
+  <rect x="68" y="434" width="620" height="112" rx="10" fill="#112a20" stroke="#2f6e52"/>
+  <text x="84" y="460" font-size="14" font-weight="600" letter-spacing="1.2" fill="#84e3b5">ADDED WHEN A PRESET MATCHES</text>
+  <text font-size="15" fill="#b4b9c6"><tspan x="84" y="485">Every INT8 constant under a unique name, with MLP biases already at</tspan><tspan x="84" y="506">accumulator scale; a weight summary; and a port contract giving the</tspan><tspan x="84" y="527">exact ports, arithmetic and handshake the testbench will use.</tspan></text>
+
+  <!-- ===== added after every turn ===== -->
+  <text x="48" y="596" font-size="14" font-weight="600" letter-spacing="1.2" fill="#858b99">ADDED AFTER EVERY TURN; NOTHING IS EDITED OR DROPPED</text>
+
+  <rect x="48" y="610" width="660" height="66" rx="14" fill="#221c36" stroke="#5a4a94"/>
+  <text x="68" y="637" font-size="17" font-weight="700" fill="#eef0f4">Model turn</text>
+  <text x="688" y="637" text-anchor="end" font-size="14" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#9d90cf">model</text>
+  <text x="68" y="660" font-size="15" fill="#b4b9c6">Its text and tool calls, stored exactly as returned.</text>
+
+  <rect x="48" y="688" width="660" height="66" rx="14" fill="#112a20" stroke="#2f6e52"/>
+  <text x="68" y="715" font-size="17" font-weight="700" fill="#eef0f4">Tool results</text>
+  <text x="688" y="715" text-anchor="end" font-size="14" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#6fbf98">tool result</text>
+  <text x="68" y="738" font-size="15" fill="#b4b9c6">One JSON object per call, written by NeuralForge.</text>
+
+  <rect x="48" y="766" width="660" height="66" rx="14" fill="#2b2312" stroke="#77591f" stroke-dasharray="7 5"/>
+  <text x="68" y="793" font-size="17" font-weight="700" fill="#eef0f4">Nudge</text>
+  <text x="688" y="793" text-anchor="end" font-size="14" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#a8997a">user</text>
+  <text x="68" y="816" font-size="15" fill="#e6dcc4">Only if the model stopped without the next tool call.</text>
+
+  <!-- ===== never sent ===== -->
+  <rect x="740" y="156" width="412" height="196" rx="14" fill="#2f191e" stroke="#7a3543"/>
+  <text x="760" y="187" font-size="14" font-weight="600" letter-spacing="1.2" fill="#ff9fb0">NEVER SENT TO THE MODEL</text>
+  <g fill="#e7a3b0">
+    <circle cx="766" cy="213" r="3.5"/>
+    <circle cx="766" cy="245" r="3.5"/>
+    <circle cx="766" cy="298" r="3.5"/>
+  </g>
+  <text font-size="15" fill="#eef0f4"><tspan x="782" y="218">The testbench NeuralForge writes</tspan><tspan x="782" y="250">Expected outputs, except those inside a</tspan><tspan x="782" y="271">reported mismatch</tspan><tspan x="782" y="303">Anything from an earlier run: every run</tspan><tspan x="782" y="324">starts a new conversation</tspan></text>
+
+  <!-- ===== what a tool result carries ===== -->
+  <rect x="740" y="364" width="412" height="468" rx="14" fill="#0f2119" stroke="#2f6e52"/>
+  <text x="760" y="395" font-size="14" font-weight="600" letter-spacing="1.2" fill="#84e3b5">WHAT A TOOL RESULT CARRIES</text>
+
+  <g font-size="15" font-weight="700" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#eef0f4">
+    <text x="760" y="430">analyze_model</text>
+    <text x="760" y="522">synthesize_verilog</text>
+    <text x="760" y="635">simulate_verilog</text>
+    <text x="760" y="769">fix_error</text>
+  </g>
+  <g font-size="14" fill="#b4b9c6">
+    <text><tspan x="760" y="453">An instruction to write the BOM and</tspan><tspan x="760" y="473">synthesize, plus the weight summary.</tspan></text>
+    <text><tspan x="760" y="545">Pass: a sha256 prefix, the cell stats and</tspan><tspan x="760" y="565">the next tool to call.</tspan><tspan x="760" y="585">Fail: the gate's reasons, or Yosys' error.</tspan></text>
+    <text><tspan x="760" y="658">Status, reason, matches out of total, and</tspan><tspan x="760" y="678">the first 5 mismatches (input, got, expected).</tspan><tspan x="760" y="698">If it did not compile: the compiler output,</tspan><tspan x="760" y="718">cut to 1,500 characters.</tspan></text>
+    <text x="760" y="792">A reminder to resubmit the fixed code.</text>
+  </g>
+
+  <!-- tool results card -> detail panel -->
+  <line x1="710" y1="721" x2="737" y2="721" stroke="#6fbf98" stroke-width="2" marker-end="url(#arrow-green)"/>
+</svg>
