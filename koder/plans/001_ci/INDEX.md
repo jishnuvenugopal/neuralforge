@@ -105,6 +105,16 @@ prints `cell count`. Cells and wires already have an old-format fallback;
 flip-flops do not. So on Yosys 0.33 the dashboard would report 0 flip-flops.
 The Iris `abc -fast` fallback test passed on the runner. Skip check passed (no skips).
 
+Fix: `d9001b0` adds the `cell count` pattern for flip-flops plus
+`tests/test_stat_parser.py` (both layouts, pure Python; fails without the fix).
+Suite is now 71 tests (81.7 s locally, none skipped).
+
+Skip guard proven, 2026-11-16: throwaway commit `162fa12` removed the apt install
+and version-print steps; "Run tests" passed with `OK (skipped=11)` and "Fail on
+skipped tests" failed the job:
+https://github.com/jishnuvenugopal/neuralforge/actions/runs/43788343975
+Reverted in `bb45792`.
+
 CI runs: (fill in: green run on main, red skip-guard run, runner Yosys version, suite time)
 
 ## Prompt
