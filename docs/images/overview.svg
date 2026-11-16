@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 610" width="1200" height="610" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>NeuralForge in one picture</title>
+  <desc>A plain-English request goes to an LLM, which writes Verilog with the weights baked in. NeuralForge then runs two gates it controls: Yosys synthesis to SkyWater 130 nm cells, and an Icarus simulation against its own bit-exact integer reference. Failures go back to the model, for at most 15 model turns. Three presets have a reference: XOR MLP, Iris classifier and an attention head.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7a8190"/>
+    </marker>
+    <marker id="arrow-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#d9788a"/>
+    </marker>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="1199" height="609" rx="24" fill="#0f1115" stroke="#24272f"/>
+
+  <text x="48" y="64" font-size="28" font-weight="700" fill="#eef0f4">NeuralForge in one picture</text>
+  <text x="48" y="96" font-size="17" fill="#b4b9c6">The model writes the design. NeuralForge writes the test and grades it.</text>
+
+  <!-- Stage 1: request -->
+  <rect x="48" y="130" width="192" height="210" rx="16" fill="#1a1c22" stroke="#30333c"/>
+  <text x="68" y="162" font-size="14" font-weight="600" letter-spacing="1.2" fill="#858b99">STEP 1</text>
+  <text x="68" y="192" font-size="20" font-weight="700" fill="#eef0f4">Request</text>
+  <text font-size="15" fill="#b4b9c6"><tspan x="68" y="224">Plain English, e.g.</tspan><tspan x="68" y="246" font-style="italic">“a 2-8-1 XOR MLP</tspan><tspan x="68" y="268" font-style="italic">with INT8 weights”</tspan></text>
+  <text x="68" y="318" font-size="14" fill="#858b99">typed in the dashboard</text>
+
+  <!-- Stage 2: model -->
+  <rect x="276" y="130" width="192" height="210" rx="16" fill="#221c36" stroke="#5a4a94"/>
+  <text x="296" y="162" font-size="14" font-weight="600" letter-spacing="1.2" fill="#c3b3ff">STEP 2 · MODEL</text>
+  <text x="296" y="192" font-size="20" font-weight="700" fill="#eef0f4">Writes the RTL</text>
+  <text font-size="15" fill="#b4b9c6"><tspan x="296" y="224">A hardware BOM,</tspan><tspan x="296" y="246">then Verilog with</tspan><tspan x="296" y="268">the trained weights</tspan><tspan x="296" y="290">baked in</tspan></text>
+  <text x="296" y="318" font-size="14" fill="#9d90cf">any tool-calling LLM</text>
+
+  <!-- Stage 3: synthesis gate -->
+  <rect x="504" y="130" width="192" height="210" rx="16" fill="#112a20" stroke="#2f6e52"/>
+  <text x="524" y="162" font-size="14" font-weight="600" letter-spacing="1.2" fill="#84e3b5">STEP 3 · GATE 1</text>
+  <text x="524" y="192" font-size="20" font-weight="700" fill="#eef0f4">Synthesis</text>
+  <text font-size="15" fill="#b4b9c6"><tspan x="524" y="224">Yosys maps it to</tspan><tspan x="524" y="246">SkyWater 130 nm</tspan><tspan x="524" y="268">cells. Empty, constant</tspan><tspan x="524" y="290">or latched designs fail</tspan></text>
+  <text x="524" y="318" font-size="14" fill="#6fbf98">sha256 recorded</text>
+
+  <!-- Stage 4: reference gate -->
+  <rect x="732" y="130" width="192" height="210" rx="16" fill="#112a20" stroke="#2f6e52"/>
+  <text x="752" y="162" font-size="14" font-weight="600" letter-spacing="1.2" fill="#84e3b5">STEP 4 · GATE 2</text>
+  <text x="752" y="192" font-size="20" font-weight="700" fill="#eef0f4">Reference</text>
+  <text font-size="15" fill="#b4b9c6"><tspan x="752" y="224">Icarus runs a test-</tspan><tspan x="752" y="246">bench NeuralForge</tspan><tspan x="752" y="268">wrote; every output</tspan><tspan x="752" y="290">must match bit-exactly</tspan></text>
+  <text x="752" y="318" font-size="14" fill="#6fbf98">same sha256 only</text>
+
+  <!-- Stage 5: result -->
+  <rect x="960" y="130" width="192" height="210" rx="16" fill="#10283a" stroke="#2e6489"/>
+  <text x="980" y="162" font-size="14" font-weight="600" letter-spacing="1.2" fill="#8ccfff">STEP 5 · RESULT</text>
+  <text x="980" y="192" font-size="20" font-weight="700" fill="#eef0f4">Verified RTL</text>
+  <text font-size="15" fill="#b4b9c6"><tspan x="980" y="224">Cells, area and an</tspan><tspan x="980" y="246">N/N verdict, tied to</tspan><tspan x="980" y="268">the exact code.</tspan><tspan x="980" y="290">GDS is optional</tspan></text>
+  <text x="980" y="318" font-size="14" fill="#7fb0d4">via LibreLane</text>
+
+  <!-- forward arrows -->
+  <g stroke="#7a8190" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <line x1="242" y1="235" x2="272" y2="235"/>
+    <line x1="470" y1="235" x2="500" y2="235"/>
+    <line x1="698" y1="235" x2="728" y2="235"/>
+    <line x1="926" y1="235" x2="956" y2="235"/>
+  </g>
+
+  <!-- retry loop -->
+  <g stroke="#d9788a" stroke-width="2" fill="none">
+    <path d="M600 340 V376"/>
+    <path d="M828 340 V376 H372 V346" marker-end="url(#arrow-rose)"/>
+  </g>
+  <text x="600" y="404" text-anchor="middle" font-size="15" fill="#e7a3b0">A gate fails: its error or mismatches go back to the model, for at most 15 model turns</text>
+
+  <!-- presets -->
+  <text x="48" y="456" font-size="14" font-weight="600" letter-spacing="1.2" fill="#858b99">PRESETS WITH A BIT-EXACT INTEGER REFERENCE</text>
+
+  <rect x="48" y="472" width="352" height="78" rx="14" fill="#1a1c22" stroke="#30333c"/>
+  <text x="68" y="503" font-size="18" font-weight="700" fill="#eef0f4">XOR MLP</text>
+  <text x="380" y="503" text-anchor="end" font-size="15" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#b4b9c6">2-8-1</text>
+  <text x="68" y="531" font-size="15" fill="#858b99">all 4 inputs checked</text>
+
+  <rect x="424" y="472" width="352" height="78" rx="14" fill="#1a1c22" stroke="#30333c"/>
+  <text x="444" y="503" font-size="18" font-weight="700" fill="#eef0f4">Iris classifier</text>
+  <text x="756" y="503" text-anchor="end" font-size="15" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#b4b9c6">4-8-3</text>
+  <text x="444" y="531" font-size="15" fill="#858b99">all 150 samples checked</text>
+
+  <rect x="800" y="472" width="352" height="78" rx="14" fill="#1a1c22" stroke="#30333c"/>
+  <text x="820" y="503" font-size="18" font-weight="700" fill="#eef0f4">Attention head</text>
+  <text x="1132" y="503" text-anchor="end" font-size="15" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#b4b9c6">d = 8, 4 tokens</text>
+  <text x="820" y="531" font-size="15" fill="#858b99">67 token sets checked</text>
+
+  <text x="48" y="584" font-size="15" fill="#858b99">Any other request is synthesized but reported as <tspan fill="#f1c56e" font-weight="600">not verified</tspan>, and is never hardened.</text>
+</svg>

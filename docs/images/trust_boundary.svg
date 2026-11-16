@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 920" width="1200" height="920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Who controls the verdict</title>
+  <desc>The model writes the hardware BOM, the Verilog with the weights baked in, its own area estimate and the name of the module to simulate. NeuralForge writes the weights and test vectors, the integer reference, the port contract, the testbench and result file, the comparison and the sha256 ledger. Only the Verilog and a module name cross the boundary. Four exploits against the first version and what now closes each: a design that prints the pass line, a model-written testbench that never checks, outputs tied to a constant, and swapping code between steps.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7a8190"/>
+    </marker>
+    <marker id="arrow-light" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#eef0f4"/>
+    </marker>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="1199" height="919" rx="24" fill="#0f1115" stroke="#24272f"/>
+
+  <text x="48" y="64" font-size="28" font-weight="700" fill="#eef0f4">Who controls the verdict</text>
+  <text x="48" y="96" font-size="17" fill="#b4b9c6">Only the model's Verilog crosses into the gate. Everything that decides pass or fail is NeuralForge's.</text>
+
+  <!-- ===== model panel ===== -->
+  <rect x="40" y="124" width="500" height="300" rx="16" fill="#221c36" stroke="#5a4a94"/>
+  <text x="64" y="158" font-size="14" font-weight="600" letter-spacing="1.2" fill="#c3b3ff">THE MODEL WRITES</text>
+  <g font-size="16" fill="#eef0f4">
+    <circle cx="70" cy="196" r="4" fill="#c3b3ff"/><text x="86" y="202">A hardware BOM (JSON list of blocks)</text>
+    <circle cx="70" cy="236" r="4" fill="#c3b3ff"/><text x="86" y="242">Verilog RTL with the INT8 weights baked in</text>
+    <circle cx="70" cy="276" r="4" fill="#c3b3ff"/><text x="86" y="282">Its own area estimate (shown, never graded)</text>
+    <circle cx="70" cy="316" r="4" fill="#c3b3ff"/><text x="86" y="322">Which synthesized module to simulate</text>
+  </g>
+  <line x1="64" y1="356" x2="516" y2="356" stroke="#3d3366"/>
+  <text font-size="15" fill="#a99dd6"><tspan x="64" y="384">It never writes a testbench, an expected value</tspan><tspan x="64" y="406">or the verdict.</tspan></text>
+
+  <!-- ===== NeuralForge panel ===== -->
+  <rect x="660" y="124" width="500" height="300" rx="16" fill="#112a20" stroke="#2f6e52"/>
+  <text x="684" y="158" font-size="14" font-weight="600" letter-spacing="1.2" fill="#84e3b5">NEURALFORGE WRITES AND CHECKS</text>
+  <g font-size="16" fill="#eef0f4">
+    <circle cx="690" cy="196" r="4" fill="#84e3b5"/><text x="706" y="202">INT8 weights and test vectors</text>
+    <circle cx="690" cy="234" r="4" fill="#84e3b5"/><text x="706" y="240">The bit-exact integer reference</text>
+    <circle cx="690" cy="272" r="4" fill="#84e3b5"/><text x="706" y="278">The port contract the design must follow</text>
+    <circle cx="690" cy="310" r="4" fill="#84e3b5"/><text x="706" y="316">Testbench, vectors, nonce-stamped result file</text>
+    <circle cx="690" cy="348" r="4" fill="#84e3b5"/><text x="706" y="354">Every output compared with the reference</text>
+    <circle cx="690" cy="386" r="4" fill="#84e3b5"/><text x="706" y="392">A sha256 ledger: synthesis → simulation → GDS</text>
+  </g>
+
+  <!-- ===== boundary ===== -->
+  <line x1="600" y1="150" x2="600" y2="420" stroke="#5c6270" stroke-width="2" stroke-dasharray="6 6"/>
+  <rect x="536" y="126" width="128" height="26" rx="13" fill="#0f1115" stroke="#5c6270"/>
+  <text x="600" y="144" text-anchor="middle" font-size="14" font-weight="600" letter-spacing="1.2" fill="#9aa0ad">BOUNDARY</text>
+  <line x1="546" y1="272" x2="652" y2="272" stroke="#eef0f4" stroke-width="2.5" marker-end="url(#arrow-light)"/>
+  <rect x="558" y="236" width="84" height="24" rx="6" fill="#0f1115"/>
+  <text x="600" y="253" text-anchor="middle" font-size="14" font-weight="600" fill="#eef0f4">Verilog</text>
+  <rect x="540" y="284" width="120" height="24" rx="6" fill="#0f1115"/>
+  <text x="600" y="301" text-anchor="middle" font-size="14" fill="#9aa0ad">+ module name</text>
+
+  <!-- ===== exploits ===== -->
+  <text x="48" y="474" font-size="14" font-weight="600" letter-spacing="1.2" fill="#858b99">FOUR WAYS TO FOOL THE FIRST VERSION, AND WHAT CLOSES EACH NOW</text>
+
+  <g>
+    <!-- row 1 -->
+    <circle cx="62" cy="532" r="15" fill="#2f191e" stroke="#7a3543"/>
+    <text x="62" y="537" text-anchor="middle" font-size="14" font-weight="700" fill="#ff9fb0">1</text>
+    <rect x="90" y="492" width="430" height="80" rx="12" fill="#2f191e" stroke="#7a3543"/>
+    <text x="110" y="524" font-size="17" font-weight="700" fill="#eef0f4">The design prints the pass line</text>
+    <text x="110" y="551" font-size="14" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#e7a3b0">$display("4/4 TESTS PASSED")</text>
+    <line x1="524" y1="532" x2="594" y2="532" stroke="#7a8190" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="600" y="492" width="560" height="80" rx="12" fill="#112a20" stroke="#2f6e52"/>
+    <text x="620" y="524" font-size="17" font-weight="700" fill="#eef0f4">The verdict comes from a nonce-stamped result file</text>
+    <text x="620" y="551" font-size="14" fill="#b4b9c6">stdout is never scored; system tasks are rejected before synthesis</text>
+
+    <!-- row 2 -->
+    <circle cx="62" cy="626" r="15" fill="#2f191e" stroke="#7a3543"/>
+    <text x="62" y="631" text-anchor="middle" font-size="14" font-weight="700" fill="#ff9fb0">2</text>
+    <rect x="90" y="586" width="430" height="80" rx="12" fill="#2f191e" stroke="#7a3543"/>
+    <text x="110" y="618" font-size="17" font-weight="700" fill="#eef0f4">A testbench that never checks</text>
+    <text x="110" y="645" font-size="14" fill="#e7a3b0">the model wrote it, expected values included</text>
+    <line x1="524" y1="626" x2="594" y2="626" stroke="#7a8190" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="600" y="586" width="560" height="80" rx="12" fill="#112a20" stroke="#2f6e52"/>
+    <text x="620" y="618" font-size="17" font-weight="700" fill="#eef0f4">NeuralForge writes the testbench</text>
+    <text x="620" y="645" font-size="14" fill="#b4b9c6">expected values come from the integer reference, never the model</text>
+
+    <!-- row 3 -->
+    <circle cx="62" cy="720" r="15" fill="#2f191e" stroke="#7a3543"/>
+    <text x="62" y="725" text-anchor="middle" font-size="14" font-weight="700" fill="#ff9fb0">3</text>
+    <rect x="90" y="680" width="430" height="80" rx="12" fill="#2f191e" stroke="#7a3543"/>
+    <text x="110" y="712" font-size="17" font-weight="700" fill="#eef0f4">Outputs tied to a constant</text>
+    <text x="110" y="739" font-size="14" fill="#e7a3b0">0 cells, 0 µm², and Yosys still exits cleanly</text>
+    <line x1="524" y1="720" x2="594" y2="720" stroke="#7a8190" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="600" y="680" width="560" height="80" rx="12" fill="#112a20" stroke="#2f6e52"/>
+    <text x="620" y="712" font-size="17" font-weight="700" fill="#eef0f4">The synthesis gate inspects the netlist</text>
+    <text x="620" y="739" font-size="14" fill="#b4b9c6">more than 0 cells, no latches, no constant or undriven outputs</text>
+
+    <!-- row 4 -->
+    <circle cx="62" cy="814" r="15" fill="#2f191e" stroke="#7a3543"/>
+    <text x="62" y="819" text-anchor="middle" font-size="14" font-weight="700" fill="#ff9fb0">4</text>
+    <rect x="90" y="774" width="430" height="80" rx="12" fill="#2f191e" stroke="#7a3543"/>
+    <text x="110" y="806" font-size="17" font-weight="700" fill="#eef0f4">Swapped code between steps</text>
+    <text x="110" y="833" font-size="14" fill="#e7a3b0">simulate code other than what was synthesized</text>
+    <line x1="524" y1="814" x2="594" y2="814" stroke="#7a8190" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="600" y="774" width="560" height="80" rx="12" fill="#112a20" stroke="#2f6e52"/>
+    <text x="620" y="806" font-size="17" font-weight="700" fill="#eef0f4">Each step is bound to the code's sha256</text>
+    <text x="620" y="833" font-size="14" fill="#b4b9c6">only synthesized code is simulated; only code that passed both is hardened</text>
+  </g>
+
+  <text x="48" y="892" font-size="15" fill="#858b99">Each exploit is a regression test in <tspan font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#b4b9c6">tests/test_exploits_eda.py</tspan>, run in CI on every push and pull request.</text>
+</svg>

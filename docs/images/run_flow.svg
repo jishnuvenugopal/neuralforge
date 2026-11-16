@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1150" width="1200" height="1150" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>One NeuralForge run, step by step</title>
+  <desc>A request is matched to a preset, whose weights, test vectors and integer reference are loaded and whose constants and port contract are added to the prompt. The model then calls analyze_model and returns a hardware BOM, and calls synthesize_verilog. The synthesis gate scans the source, maps it to SkyWater 130 nm cells with Yosys, checks the netlist and records the code's sha256. simulate_verilog runs only that code in a NeuralForge-written testbench and compares every output with the reference. Any failure goes back to the model, for at most 15 model turns. A pass is verified; LibreLane hardening to GDS is optional. A request with no preset is reported as not verified.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7a8190"/>
+    </marker>
+    <marker id="arrow-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#d9788a"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c9a04d"/>
+    </marker>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="1199" height="1149" rx="24" fill="#0f1115" stroke="#24272f"/>
+
+  <text x="48" y="64" font-size="28" font-weight="700" fill="#eef0f4">One run, step by step</text>
+  <text x="48" y="96" font-size="17" fill="#b4b9c6">From pressing <tspan font-weight="600" fill="#eef0f4">Run pipeline</tspan> to the verdict. <tspan fill="#c3b3ff">Violet</tspan> steps are the model's; <tspan fill="#84e3b5">green</tspan> steps are NeuralForge's.</text>
+
+  <!-- ===== spine: x 120..700 ===== -->
+
+  <!-- 1 request -->
+  <rect x="120" y="120" width="580" height="72" rx="14" fill="#1a1c22" stroke="#30333c"/>
+  <text x="144" y="151" font-size="18" font-weight="700" fill="#eef0f4">1  Request</text>
+  <text x="144" y="176" font-size="15" fill="#b4b9c6">A plain-English prompt, sent over the WebSocket <tspan font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14">/ws/design</tspan></text>
+
+  <!-- 2 preset -->
+  <rect x="120" y="222" width="580" height="114" rx="14" fill="#112a20" stroke="#2f6e52"/>
+  <text x="144" y="253" font-size="18" font-weight="700" fill="#eef0f4">2  Match a preset and load its reference</text>
+  <text font-size="15" fill="#b4b9c6"><tspan x="144" y="279">Keyword xor, iris or attention → INT8 weights, test vectors and</tspan><tspan x="144" y="301">the integer reference. Constants and a fixed port contract are</tspan><tspan x="144" y="323">added to the prompt.</tspan></text>
+
+  <!-- 3 model turn -->
+  <rect x="120" y="364" width="580" height="80" rx="14" fill="#221c36" stroke="#5a4a94"/>
+  <text x="144" y="395" font-size="18" font-weight="700" fill="#eef0f4">3  Model turn</text>
+  <text x="144" y="421" font-size="15" fill="#b4b9c6">The provider replies with text and tool calls (streamed, via llm.py)</text>
+
+  <!-- 4 analyze -->
+  <rect x="120" y="474" width="580" height="80" rx="14" fill="#221c36" stroke="#5a4a94"/>
+  <text x="144" y="505" font-size="18" font-weight="700" fill="#eef0f4">4  <tspan font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="17">analyze_model</tspan> → hardware BOM</text>
+  <text x="144" y="531" font-size="15" fill="#b4b9c6">A JSON list of blocks and the model's own area guess (shown, not graded)</text>
+
+  <!-- 5 synthesis gate -->
+  <rect x="120" y="584" width="580" height="172" rx="14" fill="#112a20" stroke="#2f6e52"/>
+  <text x="144" y="615" font-size="18" font-weight="700" fill="#eef0f4">5  <tspan font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="17">synthesize_verilog</tspan> → synthesis gate</text>
+  <g font-size="15" fill="#b4b9c6">
+    <text x="144" y="647"><tspan fill="#84e3b5">✓</tspan>  Source scan: no system tasks, initial, force or hierarchical refs</text>
+    <text x="144" y="675"><tspan fill="#84e3b5">✓</tspan>  Yosys maps it to SkyWater 130 nm cells (abc -fast after 90 s)</text>
+    <text x="144" y="703"><tspan fill="#84e3b5">✓</tspan>  Netlist: &gt;0 cells, no latches, no constant or undriven outputs</text>
+    <text x="144" y="731"><tspan fill="#84e3b5">✓</tspan>  Pass: the code's sha256 goes into the run's ledger</text>
+  </g>
+
+  <!-- 6 reference gate -->
+  <rect x="120" y="808" width="580" height="172" rx="14" fill="#112a20" stroke="#2f6e52"/>
+  <text x="144" y="839" font-size="18" font-weight="700" fill="#eef0f4">6  <tspan font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="17">simulate_verilog</tspan> → reference gate</text>
+  <g font-size="15" fill="#b4b9c6">
+    <text x="144" y="871"><tspan fill="#84e3b5">✓</tspan>  Runs only the exact code whose sha256 passed synthesis</text>
+    <text x="144" y="899"><tspan fill="#84e3b5">✓</tspan>  NeuralForge writes the testbench and drives every vector</text>
+    <text x="144" y="927"><tspan fill="#84e3b5">✓</tspan>  Outputs go to a result file stamped with a per-run nonce</text>
+    <text x="144" y="955"><tspan fill="#84e3b5">✓</tspan>  Python compares every output with the integer reference</text>
+  </g>
+
+  <!-- 7 verified -->
+  <rect x="120" y="1032" width="580" height="80" rx="14" fill="#10283a" stroke="#2e6489"/>
+  <text x="144" y="1063" font-size="18" font-weight="700" fill="#eef0f4">7  Verified: N/N outputs match bit-exactly</text>
+  <text x="144" y="1089" font-size="15" fill="#b4b9c6">The verdict is tied to the code's sha256 and shown in the dashboard</text>
+
+  <!-- spine arrows -->
+  <g stroke="#7a8190" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <line x1="410" y1="193" x2="410" y2="218"/>
+    <line x1="410" y1="337" x2="410" y2="360"/>
+    <line x1="410" y1="445" x2="410" y2="470"/>
+    <line x1="410" y1="555" x2="410" y2="580"/>
+    <line x1="410" y1="757" x2="410" y2="804"/>
+    <line x1="410" y1="981" x2="410" y2="1028"/>
+  </g>
+  <text x="422" y="786" font-size="14" fill="#858b99">passed</text>
+  <text x="422" y="1010" font-size="14" fill="#858b99">every output matches</text>
+
+  <!-- retry loop on the left -->
+  <g stroke="#d9788a" stroke-width="2" fill="none">
+    <path d="M120 677 H84"/>
+    <path d="M120 901 H84 V404 H114" marker-end="url(#arrow-rose)"/>
+  </g>
+  <text transform="translate(70 652) rotate(-90)" text-anchor="middle" font-size="15" fill="#e7a3b0">fail → error or mismatches back to the model · at most 15 model turns</text>
+
+  <!-- ===== side notes: x 750..1152 ===== -->
+
+  <!-- no preset branch -->
+  <rect x="752" y="222" width="400" height="114" rx="14" fill="#2b2312" stroke="#77591f" stroke-dasharray="6 5"/>
+  <text x="774" y="253" font-size="16" font-weight="700" fill="#f1c56e">No preset matched</text>
+  <text font-size="15" fill="#d6c7a3"><tspan x="774" y="279">The design is still synthesized, but the run</tspan><tspan x="774" y="301">ends <tspan font-weight="600" fill="#f1c56e">not verified</tspan> and is never hardened.</tspan></text>
+  <line x1="702" y1="274" x2="748" y2="274" stroke="#c9a04d" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow-amber)"/>
+
+  <!-- notes -->
+  <g font-size="15" fill="#9aa0ad">
+    <line x1="752" y1="374" x2="752" y2="442" stroke="#5a4a94" stroke-width="3"/>
+    <text x="770" y="393">If the model stops without the next tool</text>
+    <text x="770" y="415">call, the loop nudges it, up to 2 times</text>
+    <text x="770" y="437">per step.</text>
+
+    <line x1="752" y1="484" x2="752" y2="554" stroke="#5a4a94" stroke-width="3"/>
+    <text x="770" y="503">Tools the model can call:</text>
+    <text x="770" y="527" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#c3b3ff">analyze_model · synthesize_verilog</text>
+    <text x="770" y="549" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#c3b3ff">simulate_verilog · fix_error</text>
+
+    <line x1="752" y1="600" x2="752" y2="704" stroke="#2f6e52" stroke-width="3"/>
+    <text x="770" y="621">Reports cells, flip-flops, area in µm²</text>
+    <text x="770" y="643">and the ABC mode (full or fast). The</text>
+    <text x="770" y="665">Netlist tab draws the design when</text>
+    <text x="770" y="687">netlistsvg is installed.</text>
+
+    <line x1="752" y1="824" x2="752" y2="928" stroke="#2f6e52" stroke-width="3"/>
+    <text x="770" y="845">Vectors: XOR 4 · Iris 150 · Attention 67.</text>
+    <text x="770" y="867">The simulator's printout is shown in the</text>
+    <text x="770" y="889">dashboard but never scored, so a design</text>
+    <text x="770" y="911">cannot print its way to a pass.</text>
+  </g>
+
+  <!-- optional hardening -->
+  <rect x="752" y="1032" width="400" height="80" rx="14" fill="#1a1c22" stroke="#30333c" stroke-dasharray="6 5"/>
+  <text x="774" y="1059" font-size="16" font-weight="700" fill="#eef0f4">Optional: LibreLane → GDS</text>
+  <text font-size="14" fill="#9aa0ad"><tspan x="774" y="1082">Needs LIBRELANE_AUTO_HARDEN=1 and Nix.</tspan><tspan x="774" y="1101">Runs only on code that passed both gates.</tspan></text>
+  <line x1="702" y1="1072" x2="748" y2="1072" stroke="#7a8190" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+</svg>

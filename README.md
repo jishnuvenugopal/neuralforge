@@ -11,6 +11,8 @@ it never writes or grades the test.
 Pipeline: request → hardware bill of materials → RTL → synthesis gate →
 reference simulation → optional LibreLane hardening to GDS.
 
+![NeuralForge in one picture: a plain-English request goes to the model, which writes a hardware BOM and Verilog with the trained weights baked in. Gate 1, Yosys synthesis to SkyWater 130 nm cells, rejects empty, constant or latched designs and records the code's sha256. Gate 2 runs a NeuralForge-written testbench in Icarus and requires every output to match bit-exactly. A failing gate sends its error back to the model, for at most 15 model turns. The XOR MLP, Iris classifier and attention-head presets have bit-exact references; any other request is reported as not verified.](docs/images/overview.svg)
+
 ![NeuralForge dashboard after a real XOR MLP run: 4/4 outputs match the integer reference bit-exactly](docs/images/dashboard_xor_2026-11-16.png)
 
 *A real run, not the mock replay: the XOR MLP preset on
@@ -76,7 +78,8 @@ export ANTHROPIC_MODEL="claude-opus-5-5"
 export LIBRELANE_AUTO_HARDEN=1   # optional: run LibreLane after a verified simulation
 ```
 
-Other variables the code reads:
+<details>
+<summary>Other variables the code reads</summary>
 
 | Variable | Default | Sets |
 |---|---|---|
@@ -94,11 +97,23 @@ Other variables the code reads:
 | `LIBRELANE_DEFAULT_DIE_AREA` | `[0, 0, 600, 600]` | die area for hardening (JSON list) |
 | `NIX_PROFILE_BIN` | `/nix/var/nix/profiles/default/bin` | where to look for Nix tools |
 
+</details>
+
 ### Requirements
 
 Python 3.10+, Node.js (once, to build the UI), Yosys and Icarus Verilog
 (`brew install yosys icarus-verilog`, or `sudo apt install yosys iverilog`).
 `netlistsvg` and Nix + LibreLane are optional. The Setup guide in the app checks all of these.
+
+## How it works
+
+The model only ever proposes code. Each proposal goes through two gates that
+NeuralForge owns, and a failure goes back to the model as an error message,
+for at most 15 model turns. The sha256 recorded at synthesis follows the code
+through simulation and, if enabled, hardening, so every verdict belongs to one
+exact design.
+
+![One run, step by step: 1, the request arrives over the WebSocket. 2, a preset is matched and its INT8 weights, test vectors and integer reference are loaded; constants and a port contract are added to the prompt, and an unmatched request ends not verified. 3, a model turn. 4, analyze_model returns a hardware BOM. 5, synthesize_verilog runs the synthesis gate: source scan, Yosys mapping to SkyWater 130 nm with abc -fast after 90 s, netlist checks, and the code's sha256 into the ledger. 6, simulate_verilog runs the reference gate: only the hashed code, a NeuralForge testbench, a nonce-stamped result file and a comparison of every output. 7, verified. A failure in step 5 or 6 returns to step 3. LibreLane hardening to GDS is optional.](docs/images/run_flow.svg)
 
 ## Presets
 
@@ -173,7 +188,15 @@ What these numbers do and do not show:
 - LibreLane hardening is optional and needs Nix; the results above cover
   synthesis and simulation only.
 
-## Project layout
+## Architecture
+
+NeuralForge is one local Python process. The browser talks to it over a
+WebSocket for runs and REST for settings; the server reaches the model provider
+over HTTPS and runs the EDA tools as subprocesses.
+
+![Architecture: the React and Vite dashboard in the browser talks to a FastAPI server on localhost:8000 over the WebSocket /ws/design and REST endpoints under /api. Inside the server: settings.py and prereqs.py, llm.py, the agent loop with its four tools, and the verification gate made of golden.py, verifier.py and eda_tools.py. llm.py calls the model provider over HTTPS: NVIDIA NIM by default, or any OpenAI- or Anthropic-compatible API. eda_tools.py runs Yosys with pdk/sky130.lib and Icarus Verilog, and optionally netlistsvg and LibreLane via Nix. model_trainer.py and docs/runs/recheck.py run offline.](docs/images/architecture.svg)
+
+### Project layout
 
 ```text
 neuralforge/
@@ -196,6 +219,8 @@ neuralforge/
 ```
 
 ## How a design is verified
+
+![Who controls the verdict. The model writes a hardware BOM, Verilog with the INT8 weights baked in, its own area estimate and the name of the module to simulate; it never writes a testbench, an expected value or the verdict. NeuralForge writes the weights and test vectors, the integer reference, the port contract, the testbench and nonce-stamped result file, the comparison and the sha256 ledger. Four exploits against the first version and what closes each: a design that prints the pass line, closed by scoring only the nonce-stamped result file; a model-written testbench, closed by NeuralForge writing it from the reference; outputs tied to a constant, closed by netlist checks; swapped code, closed by binding each step to the code's sha256.](docs/images/trust_boundary.svg)
 
 The first version of NeuralForge trusted two things it should not have: text
 the design could print, and a testbench written by the same model that wrote
