@@ -1,5 +1,5 @@
 ---
-updated_at: 16 Nov 2026 | 08:45 AM IST
+updated_at: 17 Nov 2026 | 12:44 PM IST
 ---
 # NeuralForge — operator state
 
@@ -13,11 +13,18 @@ both served at http://localhost:8000.
 CI on a neutral runner (done), real runs others can re-verify (one so far), then measured pass rates.
 
 Run: `NEURALFORGE_NO_BROWSER=1 bash start.sh` · Tests: `python3.12 -m unittest discover -s tests -v`
-(75 tests, ~82 s, none skipped with Yosys 0.63 + Icarus 13.0). Use python3.12 for
+(75 tests, ~80 s, none skipped with Yosys 0.63 + Icarus 13.0). Use python3.12 for
 anything importing backend/; plain python3 here lacks the packages.
 
 ## Past
 
+- 2026-11-17: README diagrams merged (PR #4, merge `eff3aba`, plan `004`). Eight SVGs in
+  `docs/images/`: overview, run flow, architecture, trust boundary, then agent loop,
+  prompt context, provider layer and evidence. README reworked for first-read clarity:
+  "At a glance" and "Techniques and where they live" tables; new sections "The agent
+  loop", "Evidence" (Tests and CI, Results) and "Configuration" (providers, env vars);
+  text moved, not dropped. Two stale "Gemini" docstrings fixed (`prompts.py`, `main.py`);
+  system prompt and tool declarations unchanged. Seen on github.com: all ten images load.
 - 2026-11-16: providers made generic (PR #3, merge `fac461a`, plan `003`): NIM (default),
   OpenAI-compatible, Anthropic-compatible; ZYT Foundry removed. Env: `NEURALFORGE_PROVIDER`
   + `NVIDIA_*` / `OPENAI_*` / `ANTHROPIC_*` (key, base URL, model); Settings still win.
@@ -35,46 +42,54 @@ anything importing backend/; plain python3 here lacks the packages.
   no secrets. README has the badge. Run URLs in `plans/001_ci` Results.
 - 2026-11-16: the first CI run found a real bug. `_parse_stat` counted 0 flip-flops on
   Yosys 0.33 (rows are `cell count`, not `count area cell`). Fixed in `d9001b0` with
-  `tests/test_stat_parser.py` covering both layouts. Tests unchanged otherwise.
-- 2026-11-16: skip guard proven on the runner: without the tools the suite says
-  `OK (skipped=11)` and exits 0; the "Fail on skipped tests" step fails it
-  (throwaway `162fa12`, reverted `bb45792`, kept in history via merge commit).
+  `tests/test_stat_parser.py` covering both layouts. Skip guard proven on the runner
+  (throwaway `162fa12`, reverted `bb45792`).
 - 2026-11-15: published the NIM work; README gained Results, Limitations, env vars;
-  `pdk/` carries the Apache-2.0 text and NOTICE. Plans 001/002 written (761462e).
-- 2026-10-20: super-vl is the spec default (01dfb55); NVIDIA_NIM_MODELS is
-  probe-ordered (2b9e02f); Settings button in the header (7adbd63).
-- 2026-10-19: NVIDIA NIM as default provider (e6eecfb), streamed OpenAI-compatible
-  calls with empty-stream reporting (778b498); 8-model probe + live presets → `issues/001`.
+  `pdk/` carries the Apache-2.0 text and NOTICE.
+- 2026-10-19/20: NVIDIA NIM as default provider (e6eecfb), streamed OpenAI-compatible
+  calls (778b498), super-vl as the default model (01dfb55); 8-model probe + live
+  presets → `issues/001`.
 
 ## Present
 
 - Provider `nvidia_nim`, model `nvidia/nemotron-3.5-super-vl-120b-a12b`, key saved in
   `.neuralforge/settings.json` (git-ignored). The old ZYT key is still in that file,
-  unused; ZYT works as OpenAI-compatible with base URL `https://foundry.zyt.app/v1`. Server was **not running** on 2026-11-16.
-- Evidence so far (details in `issues/001`, summarised in README Results):
+  unused; ZYT works as OpenAI-compatible with base URL `https://foundry.zyt.app/v1`.
+  Server was **not running** on 2026-11-17.
+- Evidence so far (details in `issues/001`, summarised in README Evidence → Results):
   XOR 4/4 · Iris 150/150 · Attention 67/67 bit-exact on super-vl, one passing run each
   (2026-10-19/20). gpt-oss-20b failed attention. Their RTL was not kept; only the
   2026-11-16 XOR run in `docs/runs/` can be re-checked. October cell counts lack the
   mapping mode.
 - CI covers Yosys 0.33 (runner) and 0.63 (this Mac). Runner-sensitive tests:
   exact 34 flip-flops (XOR), Iris needs full ABC > 45 s to hit the `-fast` path.
-- README has the CI badge and the 2026-11-16 XOR screenshot.
+- README: CI badge, the 2026-11-16 XOR screenshot, eight diagrams. Sections that moved:
+  Results is under Evidence; Model providers is under Configuration.
+- Limits the README now states itself: tool arguments are JSON-parsed but not validated
+  against their schema; the loop's 15-turn cap and nudges have no unit test.
+- Diagram text fit is checked by `koder/plans/004_readme_diagrams/check_svg.py` (needs
+  Pillow, reads macOS font paths). Not checked with Windows or Linux fonts.
+- The top comment in `.github/workflows/tests.yml` still says 69 tests; the suite has 75.
 - Remote: check `git status -sb`; the close commit may be local only.
 - Capture script (`capture.js`) and frame extractor lived in the session scratchpad and
   were not kept; plan 002 describes them.
 
 ## Future
 
-1. Not yet planned (pick one and write a plan): repeated live runs per preset and
-   model (pass rate, time, cells), saving every run's RTL under `docs/runs/`; a
-   mutation test of the gate (broken variants of the reference RTL, kill rate).
+1. Not yet planned (pick one and write it as `koder/plans/005_*`): repeated live runs
+   per preset and model (pass rate, time, cells), saving every run's RTL under
+   `docs/runs/`; a mutation test of the gate (broken variants of the reference RTL,
+   kill rate); a unit test for the loop's turn cap and nudges, driving `run_agent_loop`
+   with a fake conversation as `RunRecordTest` does.
 2. Consider keeping a capture script in the repo (scripts/) so screenshots and saved
    runs can be regenerated; it needs a privacy guard like the one in plan 002.
 3. The dashboard's Simulation transcript prints the simulator's temp path; a UI
    change could hide it so full-page screenshots need no crop.
+4. Small: correct the test count in the workflow's top comment, or drop the number.
 
 Owner decisions pending: GitHub topics (not set; suggested `verilog llm-agents asic
 skywater-pdk yosys hardware-verification`); which of Future 1 to plan next.
 
-Next action: choose the next evidence step (repeated runs or gate mutation test) and
-write it as `koder/plans/004_*`. Any new result must name its provider and model.
+Next action: choose the next evidence step (repeated runs, gate mutation test, or the
+loop unit test) and write it as `koder/plans/005_*`. Any new result must name its
+provider and model.

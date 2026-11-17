@@ -1,7 +1,8 @@
 # 004 — README diagrams
 
-Status: **both passes committed** 2026-11-16 · branch `docs/diagrams` (first
-pass `95ebef9`; PR #4 open, not merged)
+Status: **done** 2026-11-17 · PR #4 merged into `main` as `eff3aba` (first pass
+`95ebef9`, second pass `053167f`, header fix `32d19bb`). Seen on github.com:
+all ten README images load and the sections are in the new order.
 
 ## Result
 
