@@ -11,7 +11,7 @@ it never writes or grades the test.
 Pipeline: request → hardware bill of materials → RTL → synthesis gate →
 reference simulation → optional LibreLane hardening to GDS.
 
-| At a glance | |
+| At&nbsp;a&nbsp;glance | |
 |---|---|
 | **Task** | A plain-English request becomes Verilog with trained INT8 weights, mapped to SkyWater 130 nm cells |
 | **Agent** | A tool-calling loop over four tools, at most 15 model turns, written directly on the OpenAI and Anthropic SDKs |
