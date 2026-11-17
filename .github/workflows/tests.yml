@@ -1,7 +1,7 @@
 name: tests
 
-# The test suite is the verification gate's own evidence: 69 tests, including
-# regression tests for the four exploits the first gate let through. The
+# The test suite is the verification gate's own evidence, including regression
+# tests for the four exploits the first gate let through. The
 # simulator tests skip themselves when Yosys or Icarus is missing, and unittest
 # still exits 0 on skips, so the job fails if any test is skipped.
 
