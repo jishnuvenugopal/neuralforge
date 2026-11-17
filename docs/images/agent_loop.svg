@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1214" width="1200" height="1214" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>One run, message by message</title>
+  <desc>A sequence diagram of a clean preset run with four lanes: the dashboard, the agent loop, the model and the gate. The dashboard sends the request over the WebSocket and the loop answers with run_info. Turn 1: the loop sends the system prompt, four tool schemas, the request and the preset's constants and port contract; the model calls analyze_model. Turn 2: the tool result is added and the model replies with text holding the BOM as fenced JSON and a synthesize_verilog call; the loop streams agent_message, hardware_bom and block_rtl, runs the synthesis gate and streams block_synth_result. Turn 3: the model calls simulate_verilog; the loop runs the reference gate on the hashed code and streams simulation_result. A pass ends the loop with no closing model turn, and complete is sent. Three cases below: a failed gate returns its reasons or the first 5 mismatches as the tool result; a model that stops early gets a user message naming the next tool, at most twice per step; arguments that are not valid JSON get an error result. Every model turn counts toward the cap of 15.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7a8190"/>
+    </marker>
+    <marker id="arrow-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a99dd6"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6fbf98"/>
+    </marker>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="1199" height="1213" rx="24" fill="#0f1115" stroke="#24272f"/>
+
+  <text x="48" y="64" font-size="28" font-weight="700" fill="#eef0f4">One run, message by message</text>
+  <text x="48" y="96" font-size="17" fill="#b4b9c6">A clean run of a preset; time runs down the page. <tspan fill="#c3b3ff">Violet</tspan> messages involve the model, <tspan fill="#84e3b5">green</tspan> ones the gate.</text>
+
+  <!-- lifelines -->
+  <g stroke="#30333c" stroke-width="2" stroke-dasharray="4 6">
+    <line x1="140" y1="184" x2="140" y2="986"/>
+    <line x1="420" y1="184" x2="420" y2="986"/>
+    <line x1="790" y1="184" x2="790" y2="986"/>
+    <line x1="1060" y1="184" x2="1060" y2="986"/>
+  </g>
+
+  <!-- lane headers -->
+  <rect x="48" y="122" width="184" height="62" rx="12" fill="#1a1c22" stroke="#30333c"/>
+  <text x="140" y="149" text-anchor="middle" font-size="18" font-weight="700" fill="#eef0f4">Dashboard</text>
+  <text x="140" y="171" text-anchor="middle" font-size="14" fill="#858b99">browser</text>
+
+  <rect x="318" y="122" width="204" height="62" rx="12" fill="#1a1c22" stroke="#5c6270"/>
+  <text x="420" y="149" text-anchor="middle" font-size="18" font-weight="700" fill="#eef0f4">Agent loop</text>
+  <text x="420" y="171" text-anchor="middle" font-size="14" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#9aa0ad">run_agent_loop</text>
+
+  <rect x="688" y="122" width="204" height="62" rx="12" fill="#221c36" stroke="#5a4a94"/>
+  <text x="790" y="149" text-anchor="middle" font-size="18" font-weight="700" fill="#eef0f4">Model</text>
+  <text x="790" y="171" text-anchor="middle" font-size="14" fill="#9d90cf">provider API, via llm.py</text>
+
+  <rect x="968" y="122" width="184" height="62" rx="12" fill="#112a20" stroke="#2f6e52"/>
+  <text x="1060" y="149" text-anchor="middle" font-size="18" font-weight="700" fill="#eef0f4">Gate</text>
+  <text x="1060" y="171" text-anchor="middle" font-size="14" fill="#6fbf98">Yosys and Icarus</text>
+
+  <!-- activation bars: a model turn, a gate run -->
+  <g fill="#5a4a94">
+    <rect x="785" y="300" width="10" height="56" rx="3"/>
+    <rect x="785" y="404" width="10" height="56" rx="3"/>
+    <rect x="785" y="720" width="10" height="56" rx="3"/>
+  </g>
+  <g fill="#2f6e52">
+    <rect x="1055" y="606" width="10" height="44" rx="3"/>
+    <rect x="1055" y="834" width="10" height="52" rx="3"/>
+  </g>
+  <g font-size="14" fill="#9d90cf">
+    <text x="808" y="333">turn 1</text>
+    <text x="808" y="437">turn 2</text>
+    <text x="808" y="753">turn 3</text>
+  </g>
+
+  <!-- dashboard <-> loop -->
+  <g stroke="#7a8190" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <line x1="142" y1="224" x2="417" y2="224"/>
+    <line x1="418" y1="262" x2="143" y2="262"/>
+    <line x1="418" y1="508" x2="143" y2="508"/>
+    <line x1="418" y1="538" x2="143" y2="538"/>
+    <line x1="418" y1="568" x2="143" y2="568"/>
+    <line x1="418" y1="680" x2="143" y2="680"/>
+    <line x1="418" y1="916" x2="143" y2="916"/>
+    <line x1="418" y1="950" x2="143" y2="950"/>
+  </g>
+  <text x="280" y="216" text-anchor="middle" font-size="15" fill="#eef0f4">request, over the WebSocket</text>
+  <g text-anchor="middle" font-size="14" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#b4b9c6">
+    <text x="280" y="254">run_info</text>
+    <text x="280" y="500">agent_message</text>
+    <text x="280" y="530">hardware_bom</text>
+    <text x="280" y="560">block_rtl</text>
+    <text x="280" y="672">block_synth_result</text>
+    <text x="280" y="908">simulation_result</text>
+    <text x="280" y="942">complete</text>
+  </g>
+  <g text-anchor="middle" font-size="14" fill="#858b99">
+    <text x="280" y="281">provider and model for this run</text>
+    <text x="280" y="969">turn count, provider and model</text>
+  </g>
+
+  <!-- loop <-> model -->
+  <g stroke="#a99dd6" stroke-width="2" fill="none" marker-end="url(#arrow-violet)">
+    <line x1="422" y1="300" x2="784" y2="300"/>
+    <line x1="785" y1="356" x2="423" y2="356"/>
+    <line x1="422" y1="404" x2="784" y2="404"/>
+    <line x1="785" y1="460" x2="423" y2="460"/>
+    <line x1="422" y1="720" x2="784" y2="720"/>
+    <line x1="785" y1="776" x2="423" y2="776"/>
+  </g>
+  <g font-size="15" fill="#eef0f4">
+    <text x="438" y="292">system prompt + 4 tool schemas + request</text>
+    <text x="438" y="348">tool call <tspan font-size="14" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#c3b3ff">analyze_model</tspan></text>
+    <text x="438" y="396">+ tool result</text>
+    <text x="438" y="452">text holding the BOM as fenced JSON</text>
+    <text x="438" y="712">+ tool result</text>
+    <text x="438" y="768">tool call <tspan font-size="14" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#c3b3ff">simulate_verilog</tspan></text>
+  </g>
+  <g font-size="14" fill="#858b99">
+    <text x="438" y="319">plus preset constants and the port contract</text>
+    <text x="438" y="423">an instruction to write the BOM and synthesize</text>
+    <text x="438" y="479">and a tool call <tspan font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#c3b3ff">synthesize_verilog</tspan></text>
+    <text x="438" y="739">passed: sha256 prefix, stats, simulate next</text>
+    <text x="438" y="795">names the module; sends no testbench</text>
+  </g>
+
+  <!-- loop <-> gate -->
+  <g stroke="#6fbf98" stroke-width="2" fill="none" marker-end="url(#arrow-green)">
+    <line x1="422" y1="606" x2="1054" y2="606"/>
+    <line x1="1055" y1="650" x2="423" y2="650" stroke-dasharray="7 5"/>
+    <line x1="422" y1="834" x2="1054" y2="834"/>
+    <line x1="1055" y1="886" x2="423" y2="886" stroke-dasharray="7 5"/>
+  </g>
+  <g font-size="15" fill="#eef0f4">
+    <text x="438" y="598">gate 1: synthesize the submitted Verilog</text>
+    <text x="438" y="642">cell stats and sha256, or why it failed</text>
+    <text x="438" y="826">gate 2: simulate against the reference</text>
+    <text x="438" y="878">matches out of total, with any mismatches</text>
+  </g>
+  <text x="438" y="853" font-size="14" fill="#858b99">only the code whose sha256 passed gate 1</text>
+
+  <!-- the loop ends -->
+  <rect x="438" y="904" width="330" height="62" rx="10" fill="#1a1c22" stroke="#30333c"/>
+  <text font-size="14" fill="#b4b9c6"><tspan x="454" y="930">A pass, or a request with no reference,</tspan><tspan x="454" y="951">ends the loop: no closing model turn.</tspan></text>
+
+  <!-- when a step does not go cleanly -->
+  <text x="48" y="1026" font-size="14" font-weight="600" letter-spacing="1.2" fill="#858b99">WHEN A STEP DOES NOT GO CLEANLY</text>
+
+  <rect x="48" y="1042" width="352" height="112" rx="14" fill="#2f191e" stroke="#7a3543"/>
+  <text x="68" y="1072" font-size="17" font-weight="700" fill="#eef0f4">A gate fails</text>
+  <text font-size="14" fill="#e7a3b0"><tspan x="68" y="1096">Its reasons, or the first 5 mismatches</tspan><tspan x="68" y="1116">(input, got, expected), are the tool</tspan><tspan x="68" y="1136">result. The model fixes and resubmits.</tspan></text>
+
+  <rect x="424" y="1042" width="352" height="112" rx="14" fill="#2b2312" stroke="#77591f"/>
+  <text x="444" y="1072" font-size="17" font-weight="700" fill="#eef0f4">The model stops early</text>
+  <text font-size="14" fill="#e6dcc4"><tspan x="444" y="1096">No tool call while a step is pending:</tspan><tspan x="444" y="1116">the loop adds a user message naming</tspan><tspan x="444" y="1136">the next tool, at most twice per step.</tspan></text>
+
+  <rect x="800" y="1042" width="352" height="112" rx="14" fill="#1a1c22" stroke="#30333c"/>
+  <text x="820" y="1072" font-size="17" font-weight="700" fill="#eef0f4">Arguments are not valid JSON</text>
+  <text font-size="14" fill="#b4b9c6"><tspan x="820" y="1096">The call never reaches a tool. Its result</tspan><tspan x="820" y="1116">is an error asking for the same call</tspan><tspan x="820" y="1136">again with valid JSON.</tspan></text>
+
+  <text x="48" y="1186" font-size="15" fill="#858b99">Every model turn counts toward the cap of 15, nudged turns included. <tspan font-size="14" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#b4b9c6">status</tspan> lines are streamed before each turn and tool call.</text>
+</svg>

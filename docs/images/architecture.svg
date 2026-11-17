@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 920" width="1200" height="920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>NeuralForge architecture</title>
+  <desc>A React and Vite dashboard in the browser talks to one FastAPI server on localhost port 8000 over the WebSocket /ws/design and REST endpoints under /api. The server serves the built UI and holds the agent loop, llm.py for the model provider, settings.py and prereqs.py, and the verification gate: golden.py, verifier.py and eda_tools.py. llm.py calls the model provider over HTTPS: NVIDIA NIM by default, or any OpenAI- or Anthropic-compatible API. eda_tools.py runs Yosys with the SkyWater 130 liberty file, Icarus Verilog, and optionally netlistsvg and LibreLane. model_trainer.py and docs/runs/recheck.py run offline.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7a8190"/>
+    </marker>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="1199" height="919" rx="24" fill="#0f1115" stroke="#24272f"/>
+
+  <text x="48" y="64" font-size="28" font-weight="700" fill="#eef0f4">How NeuralForge is built</text>
+  <text x="48" y="96" font-size="17" fill="#b4b9c6">One local Python process serves the dashboard, runs the agent loop and drives the EDA tools.</text>
+
+  <!-- ===== Browser ===== -->
+  <rect x="40" y="122" width="1120" height="104" rx="16" fill="#1a1c22" stroke="#30333c"/>
+  <text x="64" y="152" font-size="14" font-weight="600" letter-spacing="1.2" fill="#858b99">BROWSER</text>
+  <text x="64" y="180" font-size="20" font-weight="700" fill="#eef0f4">Dashboard</text>
+  <text x="64" y="204" font-size="15" fill="#858b99">React + Vite</text>
+
+  <g font-size="16" fill="#eef0f4">
+    <rect x="300" y="145" width="180" height="58" rx="10" fill="#22252c" stroke="#3a3e48"/>
+    <text x="390" y="180" text-anchor="middle">Prompt + presets</text>
+
+    <rect x="496" y="145" width="130" height="58" rx="10" fill="#22252c" stroke="#3a3e48"/>
+    <text x="561" y="180" text-anchor="middle">Agent log</text>
+
+    <rect x="642" y="145" width="304" height="58" rx="10" fill="#22252c" stroke="#3a3e48"/>
+    <text x="794" y="169" text-anchor="middle">Design workspace</text>
+    <text x="794" y="191" text-anchor="middle" font-size="14" fill="#858b99">RTL · Synthesis · Netlist · Simulation</text>
+
+    <rect x="962" y="145" width="174" height="58" rx="10" fill="#22252c" stroke="#3a3e48"/>
+    <text x="1049" y="169" text-anchor="middle">Settings drawer</text>
+    <text x="1049" y="191" text-anchor="middle" font-size="14" fill="#858b99">and Setup guide</text>
+  </g>
+
+  <!-- browser <-> server -->
+  <g stroke="#7a8190" stroke-width="2" fill="none" marker-start="url(#arrow)" marker-end="url(#arrow)">
+    <line x1="470" y1="230" x2="470" y2="290"/>
+    <line x1="830" y1="230" x2="830" y2="290"/>
+  </g>
+  <text x="486" y="255" font-size="15" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#eef0f4">WebSocket /ws/design</text>
+  <text x="486" y="276" font-size="14" fill="#858b99">prompt in, run events streamed out</text>
+  <text x="846" y="255" font-size="15" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#eef0f4">REST /api/…</text>
+  <text x="846" y="276" font-size="14" fill="#858b99">settings, model lists, setup checks</text>
+
+  <!-- ===== Server ===== -->
+  <rect x="40" y="294" width="1120" height="402" rx="16" fill="#15171c" stroke="#3a3e48"/>
+  <text x="64" y="324" font-size="14" font-weight="600" letter-spacing="1.2" fill="#858b99">SERVER · LOCALHOST:8000</text>
+  <text x="64" y="352" font-size="20" font-weight="700" fill="#eef0f4">FastAPI <tspan font-weight="400" font-size="16" fill="#858b99" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace">backend/main.py</tspan></text>
+  <text x="1136" y="352" text-anchor="end" font-size="15" fill="#858b99">also serves the built UI from frontend/dist</text>
+
+  <!-- col 1: settings (top) + llm (bottom) -->
+  <rect x="64" y="378" width="320" height="136" rx="12" fill="#1d2026" stroke="#3a3e48"/>
+  <text x="84" y="408" font-size="17" font-weight="700" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#eef0f4">settings.py · prereqs.py</text>
+  <text font-size="15" fill="#b4b9c6"><tspan x="84" y="436">Provider, model and API key,</tspan><tspan x="84" y="458">saved on this machine; the key is</tspan><tspan x="84" y="480">never sent to the browser.</tspan><tspan x="84" y="502" fill="#858b99">Setup guide: which tools are installed</tspan></text>
+
+  <rect x="64" y="540" width="320" height="130" rx="12" fill="#10283a" stroke="#2e6489"/>
+  <text x="84" y="570" font-size="17" font-weight="700" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#8ccfff">llm.py</text>
+  <text font-size="15" fill="#b4b9c6"><tspan x="84" y="598">One tool-calling conversation per</tspan><tspan x="84" y="620">run, in OpenAI- or Anthropic-style</tspan><tspan x="84" y="642">messages. Also lists models and</tspan><tspan x="84" y="664" dy="-2">tests the key.</tspan></text>
+
+  <line x1="224" y1="516" x2="224" y2="537" stroke="#7a8190" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- col 2: agent loop -->
+  <rect x="444" y="378" width="292" height="292" rx="12" fill="#221c36" stroke="#5a4a94"/>
+  <text x="464" y="410" font-size="20" font-weight="700" fill="#eef0f4">Agent loop</text>
+  <text x="464" y="434" font-size="15" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#c3b3ff">run_agent_loop</text>
+  <text font-size="15" fill="#b4b9c6"><tspan x="464" y="468">Adds the preset's weights and</tspan><tspan x="464" y="490">port contract to the prompt,</tspan><tspan x="464" y="512">runs up to 15 model turns and</tspan><tspan x="464" y="534">streams events to the browser.</tspan></text>
+  <text x="464" y="574" font-size="14" font-weight="600" letter-spacing="1.2" fill="#9d90cf">TOOLS THE MODEL CAN CALL</text>
+  <text font-size="14" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#c3b3ff"><tspan x="464" y="602">analyze_model</tspan><tspan x="464" y="624">synthesize_verilog</tspan><tspan x="464" y="646">simulate_verilog · fix_error</tspan></text>
+
+  <!-- col 3: verification gate -->
+  <rect x="796" y="378" width="340" height="292" rx="12" fill="#0f2119" stroke="#2f6e52" stroke-dasharray="7 5"/>
+  <text x="816" y="408" font-size="18" font-weight="700" fill="#84e3b5">Verification gate</text>
+  <text x="816" y="430" font-size="14" fill="#8fb8a4">the model never writes or grades this</text>
+
+  <rect x="816" y="446" width="300" height="64" rx="10" fill="#112a20" stroke="#2f6e52"/>
+  <text x="832" y="472" font-size="16" font-weight="700" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#eef0f4">golden.py</text>
+  <text x="832" y="496" font-size="14" fill="#b4b9c6">bit-exact integer reference per preset</text>
+
+  <rect x="816" y="522" width="300" height="64" rx="10" fill="#112a20" stroke="#2f6e52"/>
+  <text x="832" y="548" font-size="16" font-weight="700" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#eef0f4">verifier.py</text>
+  <text x="832" y="572" font-size="14" fill="#b4b9c6">source scan · testbench · verdict · sha256</text>
+
+  <rect x="816" y="598" width="300" height="64" rx="10" fill="#112a20" stroke="#2f6e52"/>
+  <text x="832" y="624" font-size="16" font-weight="700" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#eef0f4">eda_tools.py</text>
+  <text x="832" y="648" font-size="14" fill="#b4b9c6">runs Yosys, Icarus and LibreLane</text>
+
+  <!-- in-server arrows -->
+  <g stroke="#7a8190" stroke-width="2" fill="none" marker-start="url(#arrow)" marker-end="url(#arrow)">
+    <line x1="390" y1="605" x2="438" y2="605"/>
+    <line x1="742" y1="524" x2="790" y2="524"/>
+  </g>
+
+  <!-- server -> outside -->
+  <g stroke="#7a8190" stroke-width="2" fill="none" marker-start="url(#arrow)" marker-end="url(#arrow)">
+    <line x1="224" y1="674" x2="224" y2="752"/>
+    <line x1="966" y1="666" x2="966" y2="752"/>
+  </g>
+  <text x="238" y="728" font-size="14" fill="#858b99">HTTPS</text>
+  <text x="980" y="728" font-size="14" fill="#858b99">subprocess</text>
+
+  <!-- ===== Outside ===== -->
+  <rect x="64" y="756" width="320" height="134" rx="12" fill="#10283a" stroke="#2e6489" stroke-dasharray="7 5"/>
+  <text x="84" y="786" font-size="14" font-weight="600" letter-spacing="1.2" fill="#8ccfff">REMOTE</text>
+  <text x="84" y="812" font-size="18" font-weight="700" fill="#eef0f4">Model provider</text>
+  <text font-size="15" fill="#b4b9c6"><tspan x="84" y="838">NVIDIA NIM (default), or any</tspan><tspan x="84" y="860">OpenAI- or Anthropic-compatible</tspan><tspan x="84" y="882">API, local server or gateway</tspan></text>
+
+  <rect x="444" y="756" width="292" height="134" rx="12" fill="#1a1c22" stroke="#30333c" stroke-dasharray="7 5"/>
+  <text x="464" y="786" font-size="14" font-weight="600" letter-spacing="1.2" fill="#858b99">OFFLINE, OUTSIDE A RUN</text>
+  <text x="464" y="814" font-size="15" font-weight="700" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#eef0f4">model_trainer.py</text>
+  <text x="464" y="836" font-size="14" fill="#b4b9c6">preset weights → backend/cache/</text>
+  <text x="464" y="862" font-size="15" font-weight="700" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#eef0f4">docs/runs/recheck.py</text>
+  <text x="464" y="882" font-size="14" fill="#b4b9c6">re-runs the gate on a saved run</text>
+
+  <rect x="796" y="756" width="340" height="134" rx="12" fill="#2b2312" stroke="#77591f"/>
+  <text x="816" y="786" font-size="14" font-weight="600" letter-spacing="1.2" fill="#f1c56e">LOCAL EDA TOOLS</text>
+  <text font-size="15" fill="#e6dcc4"><tspan x="816" y="812">Yosys + <tspan font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14">pdk/sky130.lib</tspan></tspan><tspan x="816" y="836">Icarus Verilog (iverilog, vvp)</tspan></text>
+  <text font-size="14" fill="#a8997a"><tspan x="816" y="862">optional: netlistsvg,</tspan><tspan x="816" y="882" dy="-2">LibreLane via Nix (to GDS)</tspan></text>
+</svg>

@@ -279,7 +279,7 @@ async def handle_function_call(
     ledger: Ledger | None = None,
     net=None,
 ):
-    """Handle a Gemini function call, run EDA tools, send results to client.
+    """Handle one tool call from the model, run EDA tools, send results to client.
 
     `ledger` records which exact code passed synthesis and simulation; `net` is
     the golden reference for the preset (None when there is no reference).
